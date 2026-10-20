@@ -1,0 +1,23 @@
+{:linters
+ {:consistent-alias
+  {:level :warning
+   :aliases {clojure.java.io io
+             clojure.set set
+             clojure.string str
+             tick.core t}}
+
+  #_#_
+  :missing-docstring
+  {:level :warning}
+
+  :single-key-in
+  {:level :warning}
+
+  :shadowed-var
+  {:level :warning}
+
+  :used-underscored-binding
+  {:level :warning}
+
+  :unused-value
+  {:level :warning}}}

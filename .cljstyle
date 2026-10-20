@@ -1,0 +1,11 @@
+;; vim: ft=clojure
+{:files
+ {:ignore #{".git"
+            ".jj"
+            ".cpcache"
+            "target"}}
+
+ :rules
+ {:indentation
+  {:indents
+   {#"(^|/)with-.*" [[:block 1]]}}}}

@@ -29,6 +29,12 @@ Use this when the user asks to "read the design and suggest updates / what I'm m
 - In the summary, mention any unexpected files in the diff that you didn't create. Do not commit.
 - Formatting: markdown lists only, no tables.
 
+## 4. Terminology renames (common follow-up)
+Users often rename a core entity after write-back (for example template → plan, "apply" → "add").
+- Run one ordered `sed -i` pass. Put specific phrases first (section titles, anchors such as `#applying-templates`, event keywords such as `:apply-template`, derived words such as "templating"), then do case variants of the bare noun (`Templates`, `Template`, `templates`, `template`). This also renames namespaced keys like `:template.task/*` → `:plan.task/*`.
+- Next, grep for leftover verb forms (`grep -niE 'appl|templat'`). Rewrite each sentence by hand so it reads naturally ("applied" → "added to a list", "re-applying" → "adding ... again"). Leave unrelated uses such as "if applicable" alone.
+- Check articles (`a plan` versus `an ...`). If the new noun now collides with a general word in the prose ("long-term planning"), point it out to the user.
+
 ## Verification
 Check that no unclosed inline-code bullets or known typos remain (no output before the diffstat means clean):
 

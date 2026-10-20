@@ -1,5 +1,5 @@
 # Dependencies
-# ...
+.jolt/
 
 # Build Tooling
 .clj-kondo/.cache

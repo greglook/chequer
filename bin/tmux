@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# vim: ft=bash
+
+# Initialize a tmux session for working on chequer.
+
+set -e
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+# Don't run inside tmux!
+if [[ -n "$TMUX" ]]; then
+    echo "Session must be set up from outside tmux!"
+    exit 1
+fi
+
+# Check if session already exists.
+if tmux has-session -t chequer 2> /dev/null; then
+    echo "tmux server already contains session 'chequer'"
+    exit 1
+fi
+
+# Initialize workspace
+tmux -2 new-session -d -s chequer -x ${COLUMNS:-80} -y ${LINES:-20}
+
+tmux rename-window -t chequer:1 vcs
+
+tmux new-window -t chequer:2 -n run
+
+tmux new-window -t chequer:3 -n src
+tmux send-keys  -t chequer:3 "vi README.md" C-m
+
+tmux new-window -t chequer:4 -n build
+
+tmux new-window -t chequer:5 -n robut
+tmux send-keys  -t chequer:3 "dirge" C-m
+
+# Attach to session
+tmux select-window -t chequer:3
+tmux attach -t chequer
