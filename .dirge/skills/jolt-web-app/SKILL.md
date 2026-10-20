@@ -1,14 +1,15 @@
 ---
 name: jolt-web-app
-description: Build/test a Jolt (Clojure-on-Chez) web app with ring-chez-adapter, hiccup2 and Datastar SSE; covers deps.edn layout, test harness, serving, and quirks.
+description: Build/extend a Jolt (Clojure on Chez Scheme) ring web app with ring-chez-adapter, hiccup and Datastar SSE; project layout, deps, testing, and Jolt quirks.
 ---
 
 # Jolt web app (ring-chez-adapter + hiccup + Datastar)
 
-## Learn idioms from examples, not by probing the binary
-- Clone the jolt-lang/examples repo from GitHub (depth 1). Useful: `ring-app` (full stack, Integrant), `glimmer-datastar` (Datastar + SSE), `hiccup-app`.
-- The ring-chez-adapter source (tag v0.8.0) is useful for API details. `src/ring_chez/sse.clj` has `event-response`, `format-event`, `send!`.
-- Don't dump `all-ns` or scan the jolt binary for strings; the user rejected that.
+## Learning Jolt APIs
+- Don't probe the jolt binary (strings, all-ns) — user rejects that. Clone sources instead:
+  - jolt-lang/examples repo (shallow clone to /tmp): `ring-app` (Integrant, ring-defaults, SQLite via jolt-lang/db), `glimmer-datastar` (datastar + SSE), `reactive-dashboard` (multi-ns test runner).
+  - jolt-lang/ring-chez-adapter at tag v0.8.0: `src/ring_chez/adapter.clj` (`run-server` opts docstring), `src/ring_chez/sse.clj`.
+- Datastar wire format: `sdk/ADR.md` in starfederation/datastar. Vendor `bundles/datastar.js` from a release tag into `resources/public/js/`.
 
 ## deps.edn shape
 ```clojure
@@ -23,30 +24,38 @@ description: Build/test a Jolt (Clojure-on-Chez) web app with ring-chez-adapter,
  :tasks {serve {:doc "run the server" :main-opts ["-m" "<app>.core"]}
          test  "jolt -M:test"}}
 ```
-- Pin full git SHAs. `jolt run` is built in, so the task is named `serve`.
-- Git deps are cached in ~/.jolt/gitlibs. Add `.jolt/` to .gitignore.
-- If `jolt test` says "Could not locate <ns> on the source roots", the test or source file doesn't exist yet. Create both before the first run.
+- Git deps need full SHAs. First run fetches deps into ~/.jolt/gitlibs and is slow — use long timeouts (≥900s).
+- `jolt run` is a builtin command, so name the server task `serve`.
 
-## Tests
-- Use clojure.test. The test namespace has a `-main` that calls `run-tests` and throws when fail+error > 0, so the exit status is non-zero on failure.
-- Call the ring handler directly with `{:request-method :get :uri "/" :headers {}}`.
-- For SSE responses, `:body` is a core.async channel. Read it with `async/<!!`. After the stream closes, `<!!` returns nil.
-- The first run is slow because of the dep fetch and compile, so use a long timeout (about 900s).
+## Server / handler
+- `(adapter/run-server handler {:port p})` returns a handle and serves on background threads; binds 127.0.0.1 by default (`:host`).
+- Keep -main alive: `(jolt.host/block-sigint) (jolt.host/park-until-interrupt) (adapter/stop-server server)`.
+- Static file: `(slurp (io/resource "public/js/datastar.js"))`.
+- SSE: response body may be a core.async channel. Use `ring-chez.sse/event-response ch` and `sse/format-event {:event "datastar-patch-elements" :data (str "elements " html)}`; close the channel to end the stream.
+- Middleware is plain fn wrapping; log via `(binding [*out* *err*] (println ...))`, time with `System/nanoTime`.
 
-## Server
-- `(adapter/run-server handler {:port p})` binds 127.0.0.1 by default (`:host "0.0.0.0"` binds all interfaces) and serves on a background thread. Stop it with `adapter/stop-server`.
-- Keep `-main` alive with `(jolt.host/block-sigint) (jolt.host/park-until-interrupt)`, then call stop-server.
-- Static resources: `(slurp (io/resource "public/js/datastar.js"))` with an explicit Content-Type, or use ring-defaults like in ring-app.
-- Smoke test: start the serve task in the background with a custom PORT env var, poll the root URL until it answers, then request the SSE route with output buffering disabled.
+## Testing
+- clojure.test; call the handler directly with `{:request-method :get :uri "/" :headers {}}`. For SSE, `async/<!!` on `(:body r)`; returns nil after close.
+- Test ns `-main` runs `run-tests` and throws `ex-info` when fail+error > 0 (non-zero exit).
+- Capture stderr with `(binding [*err* (java.io.StringWriter.)] ...)`.
+- Run `jolt test` unpiped so the exit status is real (or redirect to a log and echo the exit code).
+- Smoke test: start `PORT=39xx jolt serve` as a background shell, poll the port with an HTTP client until it answers, request the SSE route without buffering, read the shell output for log lines, then kill the shell.
 
-## Datastar
-- Vendor the bundle at `resources/public/js/datastar.js`, taken from a starfederation/datastar tag's `bundles/datastar.js` (v1.0.4 is used here). Load it with `<script type="module">`.
-- The patch event is `event: datastar-patch-elements` with `data: elements <html>`. Build it with `sse/format-event {:event ... :data (str "elements " html)}` on a channel, then `sse/event-response ch`.
-- Attribute keywords like `:data-on:click` work in hiccup2.
-- Gotcha: hiccup2 escapes `'` as `&apos;` in attributes, so assert `@get(&apos;/x&apos;)` in rendered HTML. The browser decodes it, so this is fine at runtime.
-- Higher-level option: `jolt-lang/glimmer-datastar` (`jolt.datastar.core/wrap-datastar`, `init-opts`) for ratom-driven re-rendering.
+## Quirks
+- hiccup2 escapes `'` as `&apos;` in attributes: `data-on:click="@get(&apos;/hello&apos;)"` — assert on the escaped form.
+- Calling an undefined var through an ns alias fails at runtime with "Unknown class <alias>" (normal TDD red step).
+- No real Java interop (shimmed java.* subset only); regex engine is irregex.
+
+## Library landscape (verified from jolt-lang sources)
+- SQLite: `jolt-lang/db` (clone github.com/jolt-lang/db; README, no src/ dir at top). `(require '[db.jdbc])` BEFORE `jdbc.core`; `(jdbc/connection "sqlite:path")`; `fetch`/`fetch-one`/`execute!`/`insert!`/`atomic` (nested savepoints). No last-insert-id: use `{:returning true}` on insert. Queries are strings/sqlvecs or honeysql (`honey.sql/format`). See examples `ring-app/src/app/db.clj`. System SQLite 3.53 has FTS5.
+- Time: `io.github.jolt-lang/time` (tick-style). JSON: `clojure.data.json` (used by glimmer-datastar). Crypto: `jolt-lang/jolt-crypto` (`digest`, `hmac`, `random-bytes`, `aes-cbc`, `pkey-verify`, `parse-x509`). HTTP client: `jolt-lang/http-client` (clj-http-lite). Router: `jolt-lang/router` (reitit; needs JOLT_FEATURES=clj + many deps — Chequer chose a hand-rolled router instead).
+- Markdown: examples `commonmark-app/src/app/commonmark.clj` is a dependency-free renderer to vendor (needs hardening: escape raw HTML, allow-list link schemes). markdown-clj needs shims and passes raw HTML.
+
+## ring-chez-adapter facts (v0.8.0)
+- Cloning with `-b v0.8.0` warns the tag isn't a commit but checks out 87e637e — fine.
+- `:strategy :threads` (default): fixed pool of `:worker-threads` (= core count); each open SSE stream / idle keep-alive pins a worker, so a few open pages exhaust it. `:fibers` = go block per connection on a poll thread; use it for SSE-heavy apps.
+- Other opts: `:host` (default loopback), `:keep-alive-timeout-ms` 30000, `:max-request-bytes` 1 MiB, `:max-header-bytes` 8192, `:trust-proxy N` (peer addr kept at `:ring-chez/peer-addr`), `:remote-addr` from accept().
+- Channel body = chunked stream; on client disconnect the channel is closed, so `sse/send!` / `>!!` returns false — use that to drop dead subscribers. Middleware ns: `ring-chez.middleware.{gzip,static,proxy,multipart}`. README "Streaming responses"/"Server-Sent Events" sections (~line 505) document this.
 
 ## Verification
-```
-timeout 900 jolt test
-```
+`jolt test` (from the project root) — expect "0 failures, 0 errors" and exit 0.
