@@ -1,0 +1,27 @@
+{:paths ["src" "resources"]
+
+ :deps
+ {jolt-lang/ring-chez-adapter
+  {:git/url "https://github.com/jolt-lang/ring-chez-adapter"
+   :git/tag "v0.8.0"
+   :git/sha "87e637e2ce3b6d25fee67b8bf86cd7595eea30a4"}
+
+  weavejester/hiccup
+  {:git/url "https://github.com/weavejester/hiccup"
+   :git/sha "b6b12097ba973141fe87c1b4d6a27ddcce5d5929"}}
+
+ :jolt/build
+ {:embed ["resources"]}
+
+ :tasks
+ {serve
+  {:doc "run the server"
+   :main-opts ["-m" "chequer.core"]}
+
+  test
+  "jolt -M:test"}
+
+ :aliases
+ {:test
+  {:extra-paths ["test"]
+   :main-opts ["-m" "chequer.core-test"]}}}
