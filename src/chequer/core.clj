@@ -2,6 +2,7 @@
   (:require
     [clojure.core.async :as async]
     [clojure.java.io :as io]
+    [clojure.string :as str]
     [hiccup2.core :as h]
     [ring-chez.adapter :as adapter]
     [ring-chez.sse :as sse]))
@@ -55,10 +56,29 @@
      :body "Not found"}))
 
 
+(defn wrap-request-log
+  [handler]
+  (fn [{:keys [request-method uri query-string] :as req}]
+    (let [start (System/nanoTime)
+          log (fn [outcome]
+                (binding [*out* *err*]
+                  (println (str/upper-case (name request-method))
+                           (cond-> uri query-string (str "?" query-string))
+                           outcome)))
+          elapsed #(str (quot (- (System/nanoTime) start) 1000000) "ms")]
+      (try
+        (let [resp (handler req)]
+          (log (str (:status resp) " " (elapsed)))
+          resp)
+        (catch Exception e
+          (log (str "ERROR " (elapsed) " " (ex-message e)))
+          (throw e))))))
+
+
 (defn -main
   [& _]
   (let [port (or (some-> (System/getenv "PORT") parse-long) 3000)
-        server (adapter/run-server handler {:port port})]
+        server (adapter/run-server (wrap-request-log handler) {:port port})]
     (println (str "Chequer listening on http://127.0.0.1:" port))
     (jolt.host/block-sigint)
     (jolt.host/park-until-interrupt)
