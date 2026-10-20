@@ -1,0 +1,11 @@
+# Dependencies
+# ...
+
+# Build Tooling
+.clj-kondo/.cache
+.cpcache
+.dirge/sessions/
+.nrepl-*
+
+# Build Output
+/target
