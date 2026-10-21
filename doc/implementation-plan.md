@@ -21,13 +21,13 @@ These conventions apply to every phase.
 - `chequer.router` is a hand-rolled router.
 - `chequer.web.layout`, `chequer.web.plans` and `chequer.web.lists` hold page and fragment rendering.
 - `chequer.broker` tracks SSE subscriptions.
-- `chequer.markdown` is a vendored, hardened renderer.
+- `chequer.web.markdown` is a vendored, hardened renderer.
 - `chequer.data.plans`, `chequer.data.lists` and `chequer.data.add-plan` hold the domain logic.
-- `chequer.search` and `chequer.oidc` land in later phases.
-- Tests mirror these as `test/chequer/*_test.clj`, run by one `chequer.test-runner`.
+- `chequer.data.search` and `chequer.oidc` land in later phases.
+- Tests mirror these as `test/chequer/*_test.clj` and are found and run by the Cognitect test-runner.
 
 **Mutation model:**
-- Datastar `@post`/`@put`/`@delete` handlers validate the input, then run `with-tx`, then return `204`.
+- Datastar `@post`/`@put`/`@delete` handlers validate the input against a malli schema, then run `with-tx`, then return `204`.
 - `with-tx` returns the set of topics the transaction touched, e.g. `#{[:plan 7] [:lists]}`.
 - After commit, the broker re-renders the affected fragments and pushes them to every subscribed SSE stream,
   including the actor's own.
@@ -51,18 +51,35 @@ These conventions apply to every phase.
 
 **Time:**
 - `chequer.time/now-ms` is a dynamic var so tests can pin the clock.
-- `format-instant [ms tz]` uses jolt-lang/time.
+- `format-instant [ms tz]` uses tick (`tick.core`).
 - The viewer's time zone comes from a `tz` cookie, set by an inline script in the layout from
   `Intl.DateTimeFormat().resolvedOptions().timeZone`. If that's missing, the configured `time-zone` is used.
 
 **Libraries added over time:**
-- `jolt-lang/db` and `io.github.jolt-lang/time` come in Phase 1.
+- `jolt-lang/db`, `jolt-lang/time`, `juxt/tick` (time manipulation), `metosin/malli` (schema validation) and
+  `org.clojure/tools.cli` (command line parsing) come in Phase 1. `jolt-lang/time` supplies the zone and
+  formatting layer of `java.time` that tick builds on, so both are dependencies. `clojure.data.json` also
+  needs `jolt-lang/time` at load.
+- Validation uses malli schemas throughout: config, Datastar signal bodies and domain attributes. Each schema
+  lives next to the code it guards, and `malli.core/explain` plus `malli.error/humanize` produce the messages.
+- Time handling goes through tick (`tick.core`) everywhere, with no direct `java.time` interop in app code.
 - `clojure.data.json` comes in Phase 3, for Datastar signal bodies.
 - `jolt-lang/http-client` and `jolt-lang/jolt-crypto` come in Phase 9 only.
 - The markdown renderer is vendored from the examples repo's `commonmark-app`.
 - Every git dependency gets a full `:git/sha` pin.
 
 **Testing conventions:**
+- Tests run with the Cognitect test-runner (`io.github.cognitect-labs/test-runner`, pinned with a full
+  `:git/sha`), which scans `test/` for namespaces ending in `-test`. There is no hand-written runner namespace
+  to maintain. Jolt ships `clojure.test`, and the runner works against it unmodified.
+- `deps.edn` has a `:test` alias (`:extra-paths ["test"]` plus the runner as `:extra-deps`) and a `:runner`
+  alias (`:main-opts ["-m" "cognitect.test-runner"]`). The `test` task becomes
+  `jolt -M:test:runner -e :load`, which skips the load test. The runner exits non-zero on any failure or error.
+- Narrowing a run: `-n NS` for a namespace, `-v NS/VAR` for one test, `-r REGEX`, and `-i`/`-e KEYWORD` to
+  include or exclude tests by metadata key. Slow tests are tagged `^:load` or `^:integration`.
+- The runner's namespace selection needs jolt 0.5.4 or newer; the installed version is 0.8.23.
+- `chequer.core-test` loses its custom `-main` and keeps only `deftest`s. The `:test` alias no longer sets
+  `:main-opts`.
 - Each test gets a fresh temp SQLite file, using a `with-test-db` fixture that runs every migration.
 - Handlers are tested as ring maps, with no network involved.
 - Broker tests use a fake channel that collects pushed strings.
@@ -109,15 +126,18 @@ serves `/` (placeholder shell) and `/healthz`.
                  :scopes "openid profile email"
                  :session-ttl-ms 1209600000}}}
   ```
-- `(validate-config cfg)` throws `ex-info` with a list of problems. It checks
-  for an unknown mode, a missing proxy header in proxy mode, and missing OIDC
-  keys in oidc mode.
-- The config path comes from the first CLI argument, falling back to
-  `CHEQUER_CONFIG` and then `chequer.ini`. The `PORT` env variable is removed.
+- `Config` is a malli schema for the normalized map above. `(validate-config cfg)` validates against it and
+  throws `ex-info` carrying the humanized errors. A `:multi` schema dispatching on `:auth :mode` checks for an
+  unknown mode, a missing proxy header in proxy mode, and missing OIDC keys in oidc mode.
+- Command line parsing uses tools.cli in `chequer.main`: `(parse-args args)` wraps
+  `clojure.tools.cli/parse-opts` with `-c/--config PATH` and `-h/--help`. It returns `{:config path}`,
+  `{:help usage}` or `{:errors [...]}`; unknown options and stray arguments are errors. The config path is
+  resolved as `--config`, then `CHEQUER_CONFIG`, then `chequer.ini`. The `PORT` env variable is removed.
 
 **Tests:**
 Comments and sections parse; `listen` handles `:3000` and `0.0.0.0:8080`;
-`session-ttl` accepts `14d`, `12h` and `30m`; an invalid mode throws.
+`session-ttl` accepts `14d`, `12h` and `30m`; an invalid mode throws; `parse-args` handles `-c path`,
+`--config=path`, `-h` and an unknown flag.
 
 ### Task 1.2: Connections and `with-tx`
 
@@ -229,8 +249,8 @@ same-origin is allowed; no Origin and no Sec-Fetch-Site is blocked.
 - `(page req title & body)` renders the doctype, head (Datastar module and
   CSS), an inline tz-cookie script that only sets the cookie if it differs, a
   nav with Lists, Plans, Search and the user title, then `[:main body]`.
-- `(viewer-tz req)` reads the `tz` cookie, checks it against jolt-lang/time
-  zone ids, and falls back to the config value.
+- `(viewer-tz req)` reads the `tz` cookie, checks it by trying `tick.core/zone` on it, and falls back to
+  the config value if that throws.
 - `(format-instant ms tz)` gives "Mon 3 Mar 2025, 14:05". `(relative ms now)`
   gives "in 2 days" or "3 hours ago" for due dates.
 - `GET /` renders an empty-state Lists page.
@@ -293,17 +313,18 @@ A round trip with `read-string` on the data; diff skips unchanged keys.
 
 ### Task 3.4: Plan domain
 
-**Files:** create `src/chequer/domain/plans.clj` and `test/chequer/domain/plans_test.clj`.
+**Files:** create `src/chequer/data/plans.clj` and `test/chequer/data/plans_test.clj`.
 - `create-plan!`, `update-plan!`, `delete-plan!`, `create-group!`,
   `update-group!`, `delete-group!`, `move-group!`, `create-plan-task!`,
   `update-plan-task!`, `delete-plan-task!` and `move-plan-task!` all take `[tx user attrs]`.
   Each one writes its event(s) and calls `touch!` with `[:plan pid]`, and also
   `[:plans]` for plan-level changes.
 - Deletes record a `:delete` event with `{:title t}` before deleting. Deleting a group also records a `:delete` event for each task in it.
-- `(validate-title s)` trims, rejects blank, rejects newlines and caps at 200
-  characters. `(validate-icon s)` allows blank or one grapheme cluster,
-  approximated as at most 8 code points with no ASCII letters or digits.
-  `(validate-estimate s)` accepts blank or a non-negative integer.
+- Attribute validation uses malli schemas. `Title` trims (via a `:decode` transformer), rejects blank, rejects
+  newlines and caps at 200 characters. `Icon` allows blank or one grapheme cluster, approximated as at most 8
+  code points with no ASCII letters or digits. `Estimate` accepts blank or a non-negative integer.
+  `(validate-title s)`, `(validate-icon s)` and `(validate-estimate s)` are thin wrappers that decode, validate
+  and return the cleaned value or an error message.
 - `(load-plan db id)` returns `{:plan p :ungrouped [tasks] :groups [{:group g :tasks [...]}]}` in display order.
 
 **Tests:**
@@ -377,37 +398,41 @@ in two browser tabs, and both tabs stay in sync.
 
 **Goal:** you can create blank lists, add and manage tasks with state changes, set due dates and assignees, and
 archive lists. The home page shows the active lists, and everything updates live.
+
 ### Task 4.1: Schema (migration 003)
 
 **Files:** modify `src/chequer/migrations.clj`.
-  CREATE TABLE list (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, icon TEXT,
-    due_at INTEGER, archived_at INTEGER,
-    created_at INTEGER NOT NULL, created_by INTEGER NOT NULL REFERENCES user(id),
-    updated_at INTEGER NOT NULL, updated_by INTEGER NOT NULL REFERENCES user(id));
-  CREATE TABLE list_group (id INTEGER PRIMARY KEY, list_id INTEGER NOT NULL REFERENCES list(id) ON DELETE
-  CASCADE,
-    source_id INTEGER REFERENCES plan_group(id) ON DELETE SET NULL,
-    "order" REAL NOT NULL, title TEXT NOT NULL, icon TEXT);
-  CREATE TABLE task (id INTEGER PRIMARY KEY, list_id INTEGER NOT NULL REFERENCES list(id) ON DELETE CASCADE,
-    group_id INTEGER REFERENCES list_group(id) ON DELETE CASCADE,
-    source_id INTEGER REFERENCES plan_task(id) ON DELETE SET NULL,
-    "order" REAL NOT NULL, title TEXT NOT NULL, description TEXT, icon TEXT, estimate INTEGER, due_at INTEGER,
-    assignee_id INTEGER REFERENCES user(id),
-    state TEXT NOT NULL DEFAULT 'pending' CHECK (state IN ('pending','working','completed','abandoned')),
-    created_at INTEGER NOT NULL, created_by INTEGER NOT NULL REFERENCES user(id),
-    updated_at INTEGER NOT NULL, updated_by INTEGER NOT NULL REFERENCES user(id),
-    started_at INTEGER, ended_at INTEGER, ended_by INTEGER REFERENCES user(id));
-  CREATE INDEX list_active ON list(archived_at, due_at);
-  CREATE INDEX list_group_list ON list_group(list_id, "order");
-  CREATE INDEX task_list ON task(list_id, group_id, "order");
-  CREATE INDEX task_assignee ON task(assignee_id) WHERE assignee_id IS NOT NULL;
+```sql
+CREATE TABLE list (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, icon TEXT,
+  due_at INTEGER, archived_at INTEGER,
+  created_at INTEGER NOT NULL, created_by INTEGER NOT NULL REFERENCES user(id),
+  updated_at INTEGER NOT NULL, updated_by INTEGER NOT NULL REFERENCES user(id));
+CREATE TABLE list_group (id INTEGER PRIMARY KEY, list_id INTEGER NOT NULL REFERENCES list(id) ON DELETE
+CASCADE,
+  source_id INTEGER REFERENCES plan_group(id) ON DELETE SET NULL,
+  "order" REAL NOT NULL, title TEXT NOT NULL, icon TEXT);
+CREATE TABLE task (id INTEGER PRIMARY KEY, list_id INTEGER NOT NULL REFERENCES list(id) ON DELETE CASCADE,
+  group_id INTEGER REFERENCES list_group(id) ON DELETE CASCADE,
+  source_id INTEGER REFERENCES plan_task(id) ON DELETE SET NULL,
+  "order" REAL NOT NULL, title TEXT NOT NULL, description TEXT, icon TEXT, estimate INTEGER, due_at INTEGER,
+  assignee_id INTEGER REFERENCES user(id),
+  state TEXT NOT NULL DEFAULT 'pending' CHECK (state IN ('pending','working','completed','abandoned')),
+  created_at INTEGER NOT NULL, created_by INTEGER NOT NULL REFERENCES user(id),
+  updated_at INTEGER NOT NULL, updated_by INTEGER NOT NULL REFERENCES user(id),
+  started_at INTEGER, ended_at INTEGER, ended_by INTEGER REFERENCES user(id));
+CREATE INDEX list_active ON list(archived_at, due_at);
+CREATE INDEX list_group_list ON list_group(list_id, "order");
+CREATE INDEX task_list ON task(list_id, group_id, "order");
+CREATE INDEX task_assignee ON task(assignee_id) WHERE assignee_id IS NOT NULL;
+```
 
 The migration also adds same-list group triggers, on insert and on update of `group_id`, mirroring the
 plan-side triggers from 002.
+
 ### Task 4.2: List and task domain
 
 **Files:**
-Create `src/chequer/domain/lists.clj` and `test/chequer/domain/lists_test.clj`.
+Create `src/chequer/data/lists.clj` and `test/chequer/data/lists_test.clj`.
 - CRUD functions: `create-list!`, `update-list!`, `delete-list!`,
   `archive-list!`, `unarchive-list!`, the group CRUD and move functions, and
   `create-task!`, `update-task!`, `delete-task!`, `move-task!`, all with the
@@ -460,7 +485,7 @@ Create `src/chequer/web/lists.clj` and `test/chequer/web/lists_test.clj`; add a
   each subscription.
 
 **Due-date input:** an `<input type="datetime-local">` value is interpreted in the viewer's time zone and
-converted to UTC milliseconds with jolt-lang/time.
+converted to UTC milliseconds with tick (`local-date-time` → `in` zone → instant).
 
 **Tests:**
   • Checking a task pushes the updated `#task-88` and `#list-9` header to the other stream.
@@ -479,7 +504,7 @@ merge rules.
 ### Task 5.1: Merge algorithm
 
 **Files:**
-Create `src/chequer/domain/add_plan.clj` and `test/chequer/domain/add_plan_test.clj`.
+Create `src/chequer/data/add_plan.clj` and `test/chequer/data/add_plan_test.clj`.
 - `(normalize-title s)` trims and lower-cases the title.
 
 `(add-plan! tx user list-id plan-id)` does the following:
@@ -581,7 +606,7 @@ A state change sends exactly two fragments.
 ### Task 7.3: Load test
 
 **Files:**
-Create `test/chequer/load_test.clj`. It's excluded from the default run and runs with `jolt -M:test load`.
+Create `test/chequer/load_test.clj`. Its test is tagged `^:load`, so the default `jolt test` skips it, and it runs with `jolt -M:test:runner -i :load`.
 - The test opens 50 SSE streams against a real server on a random port,
   performs 100 mutations, and checks that every stream receives every update
   within 2 seconds. It also checks that request latency stays under 200 ms at
@@ -735,6 +760,11 @@ Create `README.md` and `doc/operations.md`.
 - Jolt library gaps (jolt-lang/db pooling, `locking`, time-zone data): spike
   these in Task 1.2 and Task 2.4 before relying on them. The fallback is a
   core.async-channel mutex and the configured time zone only.
+- malli and `jolt-lang/time` (which tick builds on) are listed as supported on Jolt's libraries page, but
+  tools.cli isn't listed. Spike malli, tick (with `jolt-lang/time`) and tools.cli in Task 1.1: one
+  `parse-opts`, one `validate`/`explain`, and `tick.core/zone`, `in` and formatting with `America/New_York`.
+  If tools.cli doesn't load, the fallback is a small hand-written flag parser for `-c/--config` and
+  `-h/--help`.
 - SSE capacity under `:threads`: before Phase 7, only a few tabs can be open.
   Phase 7 switches to `:fibers`, and that should be pulled earlier if it hurts
   during development.
@@ -772,7 +802,7 @@ Create `README.md` and `doc/operations.md`.
   id. Logging out deletes the session row and closes that session's SSE
   streams.
 - Config keys `listen` and `base-url` replace the `PORT` env variable. The
-  config path comes from the CLI argument, then `CHEQUER_CONFIG`, then
+  config path comes from `--config`, then `CHEQUER_CONFIG`, then
   `chequer.ini`.
 - Migrations are numbered and compiled into the binary: 001 users and events,
   002 plans, 003 lists, 004 search, 005 sessions and settings. Each upgrade
