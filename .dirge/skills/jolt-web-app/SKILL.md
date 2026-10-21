@@ -118,6 +118,14 @@ description: Build/extend a Jolt (Clojure on Chez Scheme) ring web app with ring
 - With `:shadowed-var` on, don't name params `name`/`handler` when they shadow core vars or the enclosing defn; use `user-name`, `next-handler`, or destructure `{route-handler :handler}`.
 - Edit files with the edit/write tools, never python/sed via bash (user objected).
 
+## CI (Gitea/GitHub Actions) for a Jolt app
+- Chequer's workflow lives at .gitea/workflows/ci.yml (remote is a self-hosted Gitea). It triggers on push to main plus pull_request, and runs two parallel jobs on ubuntu-latest.
+- Install jolt by piping jolt's own install script (raw.githubusercontent.com/jolt-lang/jolt/main/install) into bash with the args --dir $HOME/.jolt --version vX.Y.Z --checksum SHA256, then append $HOME/.jolt to $GITHUB_PATH. Script flags: --dir, --download-dir, --version, --checksum, --repo. The checksum comes from the release asset jolt-vX.Y.Z-x86_64-linux.tar.gz.sha256. jolt-lang/db's own .github/workflows/tests.yml installs jolt the same way.
+- The jolt binary is dynamically linked against libuuid. apt packages: git liblz4-1 zlib1g libtinfo6 libsqlite3-0 libuuid1 (git is needed to fetch the git deps). Use SUDO="$(command -v sudo || true)" so the step works on runner images with or without sudo.
+- Cache git deps at ~/.local/state/clojure/gitlibs, keyed on hashFiles('deps.edn').
+- Lint job: download the static cljstyle build (cljstyle_VER_linux_amd64_static.zip from greglook/cljstyle releases) and clj-kondo-VER-linux-amd64.zip (its tag has a v prefix), installing unzip if it's missing. Pin the same versions as the local tools.
+- Local checks: parse the YAML with python3 (ruby isn't installed, and PyYAML loads the on: key as True), install jolt into a mktemp dir and run jolt --version, and run cljstyle and kondo. Only the real runner can fully confirm the workflow.
+
 ## Verification
 Note (Chequer): `jolt test` only exists if deps.edn defines a `:tasks` map; otherwise it fails with "unknown command or task: test", and `jolt -M:test` alone just opens a REPL that runs nothing. Preferred setup: a `:test` alias with `:extra-paths ["test"]` plus cognitect-labs/test-runner (pinned by `:git/sha`), and a `bin/test` wrapper doing `exec jolt -M:test -m cognitect.test-runner "$@"` (`-n my.ns-test` runs one namespace). Judge success from the "Ran N tests... 0 failures, 0 errors" line; `${pipestatus[1]}` printed empty under zsh here.
 

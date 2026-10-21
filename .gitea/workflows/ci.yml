@@ -1,0 +1,70 @@
+name: ci
+
+on:
+  - push
+  - pull_request
+
+env:
+  JOLT_VERSION: v0.8.23
+  JOLT_SHA256: 90031be43241e61d0788a2f1bbd3da56d8f4324ae9fa87271f9637b43a6071f2
+  CLJSTYLE_VERSION: 0.17.642
+  CLJ_KONDO_VERSION: 2025.01.16
+
+jobs:
+  test:
+    runs-on: node-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jolt
+        run: |
+          set -euo pipefail
+          SUDO="$(command -v sudo || true)"
+          $SUDO apt-get update
+          $SUDO apt-get install -y --no-install-recommends git liblz4-1 zlib1g libtinfo6 libsqlite3-0 libuuid1
+          curl -fsSL https://raw.githubusercontent.com/jolt-lang/jolt/main/install \
+            | bash -s -- --dir "$HOME/.jolt" --version "$JOLT_VERSION" --checksum "$JOLT_SHA256"
+          echo "$HOME/.jolt" >> "$GITHUB_PATH"
+
+      - name: Cache git deps
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/state/clojure/gitlibs
+          key: gitlibs-${{ hashFiles('deps.edn') }}
+
+      - name: Run tests
+        run: bin/test
+
+  style:
+    runs-on: node-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cljstyle
+        run: |
+          set -euo pipefail
+          command -v unzip >/dev/null || { $(command -v sudo || true) apt-get update && $(command -v sudo || true) apt-get install -y --no-install-recommends unzip; }
+          mkdir -p "$HOME/bin" && cd "$(mktemp -d)"
+          curl -fsSLo cljstyle.zip "https://github.com/greglook/cljstyle/releases/download/${CLJSTYLE_VERSION}/cljstyle_${CLJSTYLE_VERSION}_linux_amd64_static.zip"
+          unzip -o cljstyle.zip -d "$HOME/bin"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Check code style
+        run: cljstyle check src test
+
+  lint:
+    runs-on: node-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clj-kondo
+        run: |
+          set -euo pipefail
+          command -v unzip >/dev/null || { $(command -v sudo || true) apt-get update && $(command -v sudo || true) apt-get install -y --no-install-recommends unzip; }
+          mkdir -p "$HOME/bin" && cd "$(mktemp -d)"
+          curl -fsSLo clj-kondo.zip "https://github.com/clj-kondo/clj-kondo/releases/download/v${CLJ_KONDO_VERSION}/clj-kondo-${CLJ_KONDO_VERSION}-linux-amd64.zip"
+          unzip -o clj-kondo.zip -d "$HOME/bin"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Lint
+        run: clj-kondo --lint src test
