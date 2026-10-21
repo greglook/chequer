@@ -1,20 +1,23 @@
 (ns chequer.db
-  "SQLite access: a locked writer connection, a reader pool, transactions and migrations."
-  (:require
-    [chequer.migrations :as migrations]
-    [clojure.java.io :as io]
-    [db.jdbc]
-    [jdbc.core :as jdbc]))
+  "SQLite access: a locked writer connection, a reader pool, transactions and migrations.
 
+  Schema migrations are loaded from `resources/chequer/migrations/<yyyymmdd>-<nnn>-<slug>.sql`,
+  where `nnn` is the schema version the database is at after the migration.
+  Statements in a file end with a semicolon at the end of a line; -- line
+  comments are dropped."
+  (:require
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+    [db.jdbc]
+    [jdbc.core :as jdbc]
+    [tick.core :as t]))
+
+
+;; ## DB Connection
 
 (def ^:private reader-count
   "Number of pooled read connections."
   4)
-
-
-(def ^:dynamic *topics*
-  "Atom of topics touched by the transaction running on this thread, or nil outside one."
-  nil)
 
 
 (defn- connect
@@ -39,11 +42,114 @@
      :readers (atom (vec (repeatedly reader-count #(connect path))))}))
 
 
-(defn close
+(defn close!
   "Close the writer and every pooled reader connection of db."
   [{:keys [writer readers]}]
   (doseq [conn (cons writer @readers)]
     (.close conn)))
+
+
+;; ## Schema Migration
+
+(def ^:private migrations-dir
+  "chequer/migrations")
+
+
+(defmacro ^:private list-migration-files
+  "The migration file names, listed at compile time: an embedded resource
+  directory cannot be listed in a built binary, but its files can still be
+  read."
+  []
+  (vec (sort (map #(.getName %) (.listFiles (io/file (io/resource migrations-dir)))))))
+
+
+(def migration-files
+  "Vector of migration filenames, collected at build time."
+  (list-migration-files))
+
+
+(defn- parse-migration-name
+  "Parse a migration file's name to get its date, version, and slug."
+  [filename]
+  (let [[_ year month day version slug] (or (re-matches #"(\d{4})(\d\d)(\d\d)-(\d{3})-([a-z0-9]+(?:-[a-z0-9]+)*)\.sql" filename)
+                                            (throw (ex-info (str "Malformed migration file name: " filename)
+                                                            {:file filename})))]
+    {:name slug
+     :date (t/date (str year "-" month "-" day))
+     :version (parse-long version)}))
+
+
+(defn- parse-migration-text
+  "Parse a migration file's text and return a vector of the SQL statements."
+  [text]
+  (->>
+    text
+    (str/split-lines)
+    (remove #(str/starts-with? (str/trim %) "--"))
+    (str/join "\n")
+    (#(str/split % #";[ \t]*(?:\n|$)"))
+    (map str/trim)
+    (remove str/blank?)
+    (vec)))
+
+
+(defn- load-migration
+  "Prepare a migration to be run by parsing its filename and attaching a delay
+  which will return the SQL statements."
+  [filename]
+  (assoc (parse-migration-name filename)
+         :file filename
+         :statements (delay
+                       (-> (str migrations-dir "/" filename)
+                           (io/resource)
+                           (slurp)
+                           (parse-migration-text)))))
+
+
+(defn- user-version
+  "The schema version stored in PRAGMA user_version."
+  [conn]
+  (:user_version (jdbc/fetch-one conn "PRAGMA user_version")))
+
+
+(defn- empty-database?
+  "True when the database has no user tables."
+  [conn]
+  (nil? (jdbc/fetch-one conn "SELECT 1 FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' LIMIT 1")))
+
+
+(defn migrate!
+  "Apply pending migrations (default: all migrations) in one transaction. A
+  non-empty database is first copied to <path>.pre-v<N>.bak with VACUUM INTO,
+  where N is the version being migrated to; an existing backup is never
+  overwritten."
+  ([db]
+   (let [migrations (mapv load-migration migration-files)]
+     (migrate! db migrations)))
+  ([{:keys [path writer lock]} migrations]
+   (locking lock
+     (let [current (user-version writer)
+           pending (filterv #(< current (:version %)) migrations)]
+       (when (seq pending)
+         (let [target (:version (last pending))]
+           (when-not (empty-database? writer)
+             (let [backup (str path ".pre-v" target ".bak")]
+               (when (.exists (io/file backup))
+                 (throw (ex-info (str "Backup already exists, refusing to overwrite: " backup)
+                                 {:backup backup})))
+               (jdbc/execute! writer ["VACUUM INTO ?" backup])))
+           (jdbc/atomic writer
+                        (doseq [{:keys [statements]} pending
+                                statement @statements]
+                          (jdbc/execute! writer statement))
+                        (jdbc/execute! writer (str "PRAGMA user_version = " target)))))))))
+
+
+;; ## Write Operations
+
+(def ^:dynamic *topics*
+  "Atom of topics touched by the transaction running on this thread, or nil outside one."
+  nil)
 
 
 (defn run-tx
@@ -74,6 +180,8 @@
   [tx table row]
   (:id (first (jdbc/insert! tx table row {:returning true}))))
 
+
+;; ## Read Operations
 
 (defn- checkout
   "Atomically take a connection from the readers atom, or nil if the pool is empty."
@@ -106,41 +214,3 @@
   "Run the read sqlvec and return the first row, or nil."
   [db sqlvec]
   (with-reader db #(jdbc/fetch-one % sqlvec)))
-
-
-(defn- user-version
-  "The schema version stored in PRAGMA user_version."
-  [conn]
-  (:user_version (jdbc/fetch-one conn "PRAGMA user_version")))
-
-
-(defn- empty-database?
-  "True when the database has no user tables."
-  [conn]
-  (nil? (jdbc/fetch-one conn "SELECT 1 FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' LIMIT 1")))
-
-
-(defn migrate!
-  "Apply pending migrations (default: all of chequer.migrations/migrations) in one
-  transaction. A non-empty database is first copied to <path>.pre-v<N>.bak with
-  VACUUM INTO, where N is the version being migrated to; an existing backup is
-  never overwritten."
-  ([db]
-   (migrate! db migrations/migrations))
-  ([{:keys [path writer lock]} all-migrations]
-   (locking lock
-     (let [current (user-version writer)
-           pending (filter #(> (:version %) current) all-migrations)]
-       (when (seq pending)
-         (let [target (:version (last pending))]
-           (when-not (empty-database? writer)
-             (let [backup (str path ".pre-v" target ".bak")]
-               (when (.exists (io/file backup))
-                 (throw (ex-info (str "Backup already exists, refusing to overwrite: " backup)
-                                 {:backup backup})))
-               (jdbc/execute! writer ["VACUUM INTO ?" backup])))
-           (jdbc/atomic writer
-                        (doseq [{:keys [sql]} pending
-                                statement sql]
-                          (jdbc/execute! writer statement))
-                        (jdbc/execute! writer (str "PRAGMA user_version = " target)))))))))

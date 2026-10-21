@@ -2,8 +2,10 @@
   (:require
     [chequer.db :as db]
     [chequer.test-helpers :as helpers]
+    [clojure.java.io :as io]
     [clojure.test :refer [deftest is]]
-    [jdbc.core :as jdbc]))
+    [jdbc.core :as jdbc]
+    [tick.core :as t]))
 
 
 (defn- with-db
@@ -14,7 +16,7 @@
       (jdbc/execute! (:writer d) "CREATE TABLE thing (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE)")
       (f d)
       (finally
-        (db/close d)
+        (db/close! d)
         (helpers/delete-db-files path)))))
 
 
@@ -98,3 +100,132 @@
         (is (= n (count @(:readers d))))
         (is (thrown? Exception (db/q d ["SELECT * FROM missing"])))
         (is (= n (count @(:readers d))) "a failed read still returns its connection")))))
+
+
+;; ## Schema Migration
+
+(defn- with-empty-db
+  [f]
+  (let [path (helpers/temp-db-path)
+        d (db/open path)]
+    (try
+      (f d path)
+      (finally
+        (db/close! d)
+        (helpers/delete-db-files path)))))
+
+
+(defn- user-version
+  [d]
+  (:user_version (jdbc/fetch-one (:writer d) "PRAGMA user_version")))
+
+
+(defn- table-names
+  [d]
+  (set (map :name (db/q d ["SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"]))))
+
+
+(def ^:private latest
+  (:version (#'db/parse-migration-name (last db/migration-files))))
+
+
+(deftest migration-files-are-sorted-by-name
+  (is (= "20261021-001-create-users-and-events.sql" (first db/migration-files)))
+  (is (= (sort db/migration-files) db/migration-files)))
+
+
+(deftest migration-versions-are-consecutive-from-one
+  (is (= (range 1 (inc latest))
+         (map (comp :version #'db/parse-migration-name) db/migration-files))))
+
+
+(deftest parse-migration-name-reads-date-version-and-slug
+  (is (= {:name "add-things" :date (t/date "2026-11-01") :version 12}
+         (#'db/parse-migration-name "20261101-012-add-things.sql"))))
+
+
+(deftest parse-migration-name-rejects-a-malformed-name
+  (doseq [bad ["2026-10-21-001-x.sql" "20261021-1-x.sql" "20261021-001.sql" "20261021-001-X.sql" "20261021-001-x.txt"]]
+    (is (thrown-with-msg? Exception #"Malformed migration file name" (#'db/parse-migration-name bad))
+        bad)))
+
+
+(deftest parse-migration-text-splits-statements-and-drops-comments
+  (is (= ["CREATE TABLE a (\n  x TEXT DEFAULT ';')" "CREATE INDEX a_x ON a(x)"]
+         (#'db/parse-migration-text
+          "-- leading comment\nCREATE TABLE a (\n  x TEXT DEFAULT ';');\n\nCREATE INDEX a_x ON a(x);\n"))))
+
+
+(deftest parse-migration-text-keeps-a-trigger-body-whole-when-inner-semicolons-are-mid-line
+  (let [trigger "CREATE TRIGGER t BEFORE INSERT ON a\n  BEGIN SELECT RAISE(ABORT, 'no'); END"]
+    (is (= [trigger] (#'db/parse-migration-text (str trigger ";\n"))))))
+
+
+(deftest fresh-database-reaches-latest-version
+  (with-empty-db
+    (fn [d path]
+      (db/migrate! d)
+      (is (= latest (user-version d)))
+      (is (= #{"user" "event"} (table-names d)))
+      (is (not (.exists (io/file (str path ".pre-v" latest ".bak"))))
+          "an empty database needs no backup"))))
+
+
+(deftest rerunning-migrations-is-a-no-op
+  (with-empty-db
+    (fn [d path]
+      (db/migrate! d)
+      (db/migrate! d)
+      (is (= latest (user-version d)))
+      (is (not (.exists (io/file (str path ".pre-v" latest ".bak"))))))))
+
+
+(deftest upgrading-a-non-empty-database-writes-a-backup
+  (with-empty-db
+    (fn [d path]
+      (jdbc/execute! (:writer d) "CREATE TABLE legacy (id INTEGER PRIMARY KEY)")
+      (jdbc/execute! (:writer d) "INSERT INTO legacy DEFAULT VALUES")
+      (db/migrate! d)
+      (let [backup (str path ".pre-v" latest ".bak")
+            b (db/open backup)]
+        (try
+          (is (.exists (io/file backup)))
+          (is (= 0 (:user_version (jdbc/fetch-one (:writer b) "PRAGMA user_version")))
+              "the backup is the pre-migration state")
+          (is (= {:n 1} (db/q1 b ["SELECT count(*) AS n FROM legacy"])))
+          (finally (db/close! b)))))))
+
+
+(deftest existing-backup-is-never-overwritten
+  (with-empty-db
+    (fn [d path]
+      (jdbc/execute! (:writer d) "CREATE TABLE legacy (id INTEGER PRIMARY KEY)")
+      (spit (str path ".pre-v" latest ".bak") "precious")
+      (is (thrown-with-msg? Exception #"already exists" (db/migrate! d)))
+      (is (= "precious" (slurp (str path ".pre-v" latest ".bak"))))
+      (is (= 0 (user-version d))))))
+
+
+(deftest failing-migration-leaves-version-unchanged
+  (with-empty-db
+    (fn [d _]
+      (let [bad [{:version 1 :statements (delay ["CREATE TABLE ok (id INTEGER PRIMARY KEY)"])}
+                 {:version 2 :statements (delay ["CREATE TABLE ok2 (id INTEGER PRIMARY KEY)" "NOT VALID SQL"])}]]
+        (db/migrate! d (subvec bad 0 1))
+        (is (= 1 (user-version d)))
+        (is (thrown? Exception (db/migrate! d bad)))
+        (is (= 1 (user-version d)))
+        (is (= #{"ok"} (table-names d)) "the failed migration's earlier statements were rolled back")))))
+
+
+(deftest event-requires-an-existing-user
+  (with-empty-db
+    (fn [d _]
+      (db/migrate! d)
+      (is (thrown? Exception
+            (db/with-tx [tx d]
+              (db/insert! tx :event {:instant 1 :user_id 99 :entity_type "plan" :entity_id 1 :action "created"}))))
+      (let [uid (:result (db/with-tx [tx d]
+                           (db/insert! tx :user {:subject "owner" :name "owner" :title "Owner" :created_at 1 :last_seen 1})))]
+        (is (pos? (:result (db/with-tx [tx d]
+                             (db/insert! tx :event {:instant 1 :user_id uid :entity_type "plan" :entity_id 1 :action "created"})))))))))

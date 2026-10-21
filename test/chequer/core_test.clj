@@ -18,7 +18,7 @@
       (db/migrate! d)
       (f (core/handler {:db d :cfg cfg}))
       (finally
-        (db/close d)
+        (db/close! d)
         (helpers/delete-db-files path)))))
 
 

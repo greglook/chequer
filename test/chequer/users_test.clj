@@ -15,7 +15,7 @@
       (db/migrate! d)
       (f d)
       (finally
-        (db/close d)
+        (db/close! d)
         (helpers/delete-db-files path)))))
 
 

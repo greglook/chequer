@@ -97,16 +97,16 @@
 (defn start!
   "Open and migrate the database, then start the HTTP server. Returns {:server .. :db .. :cfg ..}."
   [cfg]
-  (let [d (db/open (get-in cfg [:database :path]))]
+  (let [db (db/open (get-in cfg [:database :path]))]
     (try
-      (db/migrate! d)
+      (db/migrate! db)
       (let [{:keys [host port]} (get-in cfg [:server :listen])
-            sys {:db d :cfg cfg}
+            sys {:db db :cfg cfg}
             server (adapter/run-server (wrap-request-log (handler sys))
                                        {:host host :port port})]
         (assoc sys :server server))
       (catch Exception e
-        (db/close d)
+        (db/close! db)
         (throw e)))))
 
 
@@ -114,4 +114,4 @@
   "Stop the HTTP server and close the database of a system returned by start!."
   [{:keys [server db]}]
   (adapter/stop-server server)
-  (db/close db))
+  (db/close! db))

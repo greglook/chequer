@@ -42,6 +42,17 @@ description: Build/extend a Jolt (Clojure on Chez Scheme) ring web app with ring
 - jdbc: require `db.jdbc` before `jdbc.core`; `jdbc/connection "sqlite:path"`; `fetch` for row-returning PRAGMAs, `execute!` otherwise; `jdbc/atomic` = `atomic-apply` with rollback on throw; `VACUUM INTO ?` works with a param.
 - ring-chez adapter `run-server` takes `:host` (default loopback) and `:port`.
 
+## Resources in built binaries (`jolt build`)
+- `:jolt/build {:embed ["resources"]}` in deps.edn embeds resources. In the built binary, `(io/resource "dir/file.sql")` works and can be slurped, but `(io/resource "dir")` returns nil, so you can't list directories at runtime. Under `jolt run`/`bin/test` you get a `file:` URL and `.listFiles` works.
+- To get a directory listing: use a macro that lists the files at compile time (`(defmacro file-names [] (vec (sort (map #(.getName %) (.listFiles (io/file (io/resource dir)))))))`), then slurp each file at runtime by its full resource path. Verified in both `jolt run` and a built binary.
+- Verify a build: `jolt build -m app.main -o /tmp/x/app` (about 7s for a small app; allow a long timeout for the real app), then run it from `/` with a /tmp config so that resources can't come from the CWD.
+- `rm -rf` is denied by the permission config. Leave /tmp scratch dirs where they are, or ask the user.
+
+## SQL migrations as resource files (Chequer pattern)
+- One file per migration: `resources/<app>/migrations/<yyyymmdd>-<nnn>-<slug>.sql`. `nnn` is the version after the migration, matched by `#"\d{8}-(\d{3})-[a-z0-9]+(?:-[a-z0-9]+)*\.sql"`, and a bad name throws ex-info.
+- jolt-lang/db sqlite `execute!` runs only the FIRST statement of a multi-statement string, and it does so silently. So split each file into statements: drop whole-line `--` comments, then split on `;[ \t]*(?:\n|$)` (a semicolon at the end of a line). Then `;` inside string literals is safe, and so is a trigger body whose inner `;` sits mid-line (`BEGIN SELECT RAISE(ABORT,'x'); END;`).
+- Tests: parse unit tests (statement split, version, malformed names), versions consecutive from 1, files in sorted order, and the existing migrate! tests still pass.
+
 ## Server / handler
 - `(adapter/run-server handler {:port p})` returns a handle and serves on background threads; binds 127.0.0.1 by default (`:host`).
 - Keep -main alive: `(jolt.host/block-sigint) (jolt.host/park-until-interrupt) (adapter/stop-server server)`.
@@ -53,10 +64,18 @@ description: Build/extend a Jolt (Clojure on Chez Scheme) ring web app with ring
 - clojure.test; call the handler directly with `{:request-method :get :uri "/" :headers {}}`. For SSE, `async/<!!` on `(:body r)`; returns nil after close.
 - Test ns `-main` runs `run-tests` and throws `ex-info` when fail+error > 0 (non-zero exit).
 - Capture stderr with `(binding [*err* (java.io.StringWriter.)] ...)`.
-- Run `jolt test` unpiped so the exit status is real (or redirect to a log and echo the exit code).
-- Smoke test: start `PORT=39xx jolt serve` as a background shell, poll the port with an HTTP client until it answers, request the SSE route without buffering, read the shell output for log lines, then kill the shell.
+- Run `bin/test` unpiped so the exit status is real, or check `${PIPESTATUS[0]}` under bash.
+- Smoke test: start the server (`bin/run`, or the built binary with a /tmp config) as a background shell, poll the port with an HTTP client until it answers, request the SSE route without buffering, read the shell output for log lines, then kill the shell.
+
+## Resources in built binaries (verified, jolt 0.8.23)
+- `:jolt/build {:embed ["resources"]}` embeds resources in `jolt build` output. In the binary, `(io/resource "dir/file.sql")` + `slurp` work, but `(io/resource "dir")` returns nil, so you can't list a directory at runtime.
+- To list them anyway, use a macro that runs at compile time: `(defmacro list-files [] (vec (sort (map #(.getName %) (.listFiles (io/file (io/resource dir)))))))`, then slurp each name at runtime (or inside a `delay`). Check it with a real `jolt build -m app.main -o /tmp/x/app` and run it from `/`, using a config and DB under /tmp.
+- jolt-lang/db sqlite `execute!` runs only the FIRST statement of a multi-statement string and silently ignores the rest. Split SQL files yourself, e.g. on `;[ \t]*(?:\n|$)` after dropping whole-line `--` comments. Trigger bodies must keep their inner `;` mid-line.
+- Private fns are testable via var: `(#'db/parse-migration-name "...")`.
 
 ## Quirks
+- `re-matches` returns `[whole g1 g2 ...]`; destructure with a leading `_`. An off-by-one here showed up as a tick parse error ("could not parse LocalDate").
+- A threaded `->>` step that needs the value somewhere other than last: `(#(str/split % re))`.
 - hiccup2 escapes `'` as `&apos;` in attributes: `data-on:click="@get(&apos;/hello&apos;)"` — assert on the escaped form.
 - Calling an undefined var through an ns alias fails at runtime with "Unknown class <alias>" (normal TDD red step).
 - No real Java interop (shimmed java.* subset only); regex engine is irregex.

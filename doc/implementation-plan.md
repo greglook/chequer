@@ -158,7 +158,11 @@ An exception inside `with-tx` rolls back; topics are returned; a reader sees com
 ### Task 1.3: Migrations
 
 **Files:** create `src/chequer/migrations.clj` and add `migrate!` to `src/chequer/db.clj`.
-- `migrations` is a vector of `{:version n :sql [stmt...]}` compiled into the binary.
+- Migration SQL lives in `resources/chequer/migrations/<yyyymmdd>-<nnn>-<slug>.sql` (e.g.
+  `20261021-001-create-users-and-events.sql`), where `nnn` is the version after the migration. Statements
+  end with `;` at the end of a line (so a trigger's inner `;` must be mid-line).
+- `migrations` is a vector of `{:file f :version n :sql [stmt...]}` in file-name order. The file names
+  are listed at compile time because embedded resource directories can't be listed in a built binary.
 - `(migrate! db)` reads `PRAGMA user_version`. If migrations are pending and the DB file isn't empty, it
   first runs `VACUUM INTO '<path>.pre-v<N>.bak'` (refusing to overwrite). Then it runs every pending
   statement plus `PRAGMA user_version = N` in one transaction.
@@ -268,24 +272,27 @@ change is logged as an event and pushed live to other open plan pages.
 
 ### Task 3.1: Schema (migration 002)
 
-**Files:** modify `src/chequer/migrations.clj`.
-  CREATE TABLE plan (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, icon TEXT,
-    created_at INTEGER NOT NULL, created_by INTEGER NOT NULL REFERENCES user(id),
-    updated_at INTEGER NOT NULL, updated_by INTEGER NOT NULL REFERENCES user(id));
-  CREATE TABLE plan_group (id INTEGER PRIMARY KEY, plan_id INTEGER NOT NULL REFERENCES plan(id) ON DELETE
-  CASCADE,
-    "order" REAL NOT NULL, title TEXT NOT NULL, icon TEXT);
-  CREATE TABLE plan_task (id INTEGER PRIMARY KEY, plan_id INTEGER NOT NULL REFERENCES plan(id) ON DELETE
-  CASCADE,
-    group_id INTEGER REFERENCES plan_group(id) ON DELETE CASCADE, "order" REAL NOT NULL,
-    title TEXT NOT NULL, description TEXT, icon TEXT, estimate INTEGER,
-    created_at INTEGER NOT NULL, created_by INTEGER NOT NULL REFERENCES user(id),
-    updated_at INTEGER NOT NULL, updated_by INTEGER NOT NULL REFERENCES user(id));
-  CREATE INDEX plan_group_plan ON plan_group(plan_id, "order");
-  CREATE INDEX plan_task_plan ON plan_task(plan_id, group_id, "order");
-  CREATE TRIGGER plan_task_group_same_plan BEFORE INSERT ON plan_task WHEN NEW.group_id IS NOT NULL
-    AND (SELECT plan_id FROM plan_group WHERE id = NEW.group_id) <> NEW.plan_id
-    BEGIN SELECT RAISE(ABORT, 'group belongs to another plan'); END;
+**Files:** create `resources/chequer/migrations/<yyyymmdd>-002-<slug>.sql`.
+
+```sql
+CREATE TABLE plan (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, icon TEXT,
+  created_at INTEGER NOT NULL, created_by INTEGER NOT NULL REFERENCES user(id),
+  updated_at INTEGER NOT NULL, updated_by INTEGER NOT NULL REFERENCES user(id));
+CREATE TABLE plan_group (id INTEGER PRIMARY KEY, plan_id INTEGER NOT NULL REFERENCES plan(id) ON DELETE
+CASCADE,
+  "order" REAL NOT NULL, title TEXT NOT NULL, icon TEXT);
+CREATE TABLE plan_task (id INTEGER PRIMARY KEY, plan_id INTEGER NOT NULL REFERENCES plan(id) ON DELETE
+CASCADE,
+  group_id INTEGER REFERENCES plan_group(id) ON DELETE CASCADE, "order" REAL NOT NULL,
+  title TEXT NOT NULL, description TEXT, icon TEXT, estimate INTEGER,
+  created_at INTEGER NOT NULL, created_by INTEGER NOT NULL REFERENCES user(id),
+  updated_at INTEGER NOT NULL, updated_by INTEGER NOT NULL REFERENCES user(id));
+CREATE INDEX plan_group_plan ON plan_group(plan_id, "order");
+CREATE INDEX plan_task_plan ON plan_task(plan_id, group_id, "order");
+CREATE TRIGGER plan_task_group_same_plan BEFORE INSERT ON plan_task WHEN NEW.group_id IS NOT NULL
+  AND (SELECT plan_id FROM plan_group WHERE id = NEW.group_id) <> NEW.plan_id
+  BEGIN SELECT RAISE(ABORT, 'group belongs to another plan'); END;
+```
 
 There is a matching `BEFORE UPDATE OF group_id` trigger as well.
 
@@ -403,7 +410,7 @@ archive lists. The home page shows the active lists, and everything updates live
 
 ### Task 4.1: Schema (migration 003)
 
-**Files:** modify `src/chequer/migrations.clj`.
+**Files:** create `resources/chequer/migrations/<yyyymmdd>-003-<slug>.sql`.
 ```sql
 CREATE TABLE list (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, icon TEXT,
   due_at INTEGER, archived_at INTEGER,
@@ -624,7 +631,7 @@ Create `test/chequer/load_test.clj`. Its test is tagged `^:load`, so the default
 ### Task 8.1: FTS index (migration 004)
 
 **Files:**
-Modify `src/chequer/migrations.clj`.
+Create `resources/chequer/migrations/<yyyymmdd>-004-<slug>.sql`.
 
 ```sql
 CREATE VIRTUAL TABLE search USING fts5(title, description, kind UNINDEXED, entity_id UNINDEXED,
@@ -670,7 +677,7 @@ Create `src/chequer/search.clj`, `src/chequer/web/search.clj` and `test/chequer/
 ### Task 9.1: Sessions (migration 005)
 
 **Files:**
-Modify `src/chequer/migrations.clj`; create `src/chequer/sessions.clj` and `test/chequer/sessions_test.clj`.
+Create `resources/chequer/migrations/<yyyymmdd>-005-<slug>.sql`, `src/chequer/sessions.clj` and `test/chequer/sessions_test.clj`.
 
 ```sql
 CREATE TABLE session (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES user(id) ON DELETE CASCADE,
