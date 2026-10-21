@@ -5,4 +5,4 @@ set -e
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-exec jolt -M:test "$@"
+exec jolt -M:test -m cognitect.test-runner "$@"

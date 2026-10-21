@@ -3,7 +3,7 @@
     [chequer.core :as core]
     [clojure.core.async :as async]
     [clojure.string :as str]
-    [clojure.test :refer [deftest is run-tests]]))
+    [clojure.test :refer [deftest is]]))
 
 
 (defn- request
@@ -68,10 +68,3 @@
                         {:request-method :get :uri "/x" :headers {}})]
     (is (= "boom" (ex-message r)) "exception is rethrown")
     (is (re-matches #"GET /x ERROR \d+ms boom\n" out))))
-
-
-(defn -main
-  [& _]
-  (let [{:keys [fail error] :as result} (run-tests 'chequer.core-test)]
-    (when (pos? (+ fail error))
-      (throw (ex-info "tests failed" result)))))
