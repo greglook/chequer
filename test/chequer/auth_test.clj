@@ -65,7 +65,7 @@
   (with-db
     (fn [d]
       (let [cfg (config/normalize {"auth.single" {"name" "greg" "title" "Greg"}})
-            h (auth/wrap-auth echo-user)
+            h (auth/wrap-auth echo-user (:auth cfg))
             u1 (:body (h (request d cfg)))
             u2 (:body (h (request d cfg :remote-addr "8.8.8.8")))]
         (is (= {:subject "owner" :name "greg" :title "Greg"} (select-keys u1 [:subject :name :title])))
@@ -76,7 +76,7 @@
 (deftest proxy-mode-trusts-loopback
   (with-db
     (fn [d]
-      (let [h (auth/wrap-auth echo-user)
+      (let [h (auth/wrap-auth echo-user (:auth proxy-cfg))
             r (h (request d proxy-cfg :headers {"x-forwarded-user" "alice"}))]
         (is (= 200 (:status r)))
         (is (= {:subject "alice" :name "alice" :title "alice"}
@@ -86,16 +86,16 @@
 (deftest proxy-mode-header-lookup-ignores-case
   (with-db
     (fn [d]
-      (let [h (auth/wrap-auth echo-user)
-            r (h (request d (assoc-in proxy-cfg [:auth :proxy :header] "X-Auth-User")
-                          :headers {"x-auth-user" "bob"}))]
+      (let [cfg (assoc-in proxy-cfg [:auth :proxy :header] "X-Auth-User")
+            h (auth/wrap-auth echo-user (:auth cfg))
+            r (h (request d cfg :headers {"x-auth-user" "bob"}))]
         (is (= "bob" (:name (:body r))))))))
 
 
 (deftest proxy-mode-returning-user-keeps-identity
   (with-db
     (fn [d]
-      (let [h (auth/wrap-auth echo-user)
+      (let [h (auth/wrap-auth echo-user (:auth proxy-cfg))
             req (request d proxy-cfg :headers {"x-forwarded-user" "alice"})
             id1 (:id (:body (h req)))
             id2 (:id (:body (h req)))]
@@ -106,7 +106,7 @@
 (deftest proxy-mode-untrusted-source-gets-403-even-with-header
   (with-db
     (fn [d]
-      (let [h (auth/wrap-auth echo-user)
+      (let [h (auth/wrap-auth echo-user (:auth proxy-cfg))
             r (h (request d proxy-cfg :remote-addr "203.0.113.9" :headers {"x-forwarded-user" "mallory"}))]
         (is (= 403 (:status r)))
         (is (= 0 (:n (db/q1 d ["SELECT count(*) AS n FROM user"]))) "nobody was provisioned")))))
@@ -115,7 +115,7 @@
 (deftest proxy-mode-missing-or-blank-header-gets-403
   (with-db
     (fn [d]
-      (let [h (auth/wrap-auth echo-user)]
+      (let [h (auth/wrap-auth echo-user (:auth proxy-cfg))]
         (is (= 403 (:status (h (request d proxy-cfg)))))
         (is (= 403 (:status (h (request d proxy-cfg :headers {"x-forwarded-user" "  "})))))))))
 
@@ -123,7 +123,7 @@
 (deftest health-and-static-paths-bypass-auth
   (with-db
     (fn [d]
-      (let [h (auth/wrap-auth (fn [req] {:status 200 :body (:chequer/user req)}))]
+      (let [h (auth/wrap-auth echo-user (:auth proxy-cfg))]
         (doseq [uri ["/healthz" "/js/datastar.js" "/css/app.css"]]
           (let [r (h (request d proxy-cfg :uri uri :remote-addr "203.0.113.9"))]
             (is (= 200 (:status r)) uri)

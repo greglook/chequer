@@ -1,7 +1,9 @@
 {
   "permission": {
     "rules": [
-      { "op": "execute", "match:" "bin/test *", "effect": "allow" }
+      { "op": "execute", "effect": "allow", "match": "bin/test *" },
+      { "op": "execute", "effect": "allow", "match": "cljstyle *" },
+      { "op": "execute", "effect": "allow", "match": "clj-kondo *" }
     ]
   }
 }

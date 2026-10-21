@@ -140,7 +140,7 @@
                                  {:backup backup})))
                (jdbc/execute! writer ["VACUUM INTO ?" backup])))
            (jdbc/atomic writer
-             (doseq [{:keys [sql]} pending
-                     statement sql]
-               (jdbc/execute! writer statement))
-             (jdbc/execute! writer (str "PRAGMA user_version = " target)))))))))
+                        (doseq [{:keys [sql]} pending
+                                statement sql]
+                          (jdbc/execute! writer statement))
+                        (jdbc/execute! writer (str "PRAGMA user_version = " target)))))))))

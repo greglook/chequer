@@ -58,8 +58,8 @@
   into the request as :params."
   [routes]
   (fn [{:keys [request-method uri] :as req}]
-    (if-let [{:keys [handler params]} (match routes request-method uri)]
-      (handler (assoc req :params params))
+    (if-let [{route-handler :handler :keys [params]} (match routes request-method uri)]
+      (route-handler (assoc req :params params))
       (let [allowed (allowed-methods routes uri)]
         (if (seq allowed)
           {:status 405

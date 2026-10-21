@@ -4,7 +4,8 @@
     [chequer.users :as users]
     [clojure.string :as str])
   (:import
-    (java.net InetAddress)))
+    (java.net
+      InetAddress)))
 
 
 (def ^:private ip-literal-re
@@ -70,10 +71,12 @@
   and then cached."
   [handler]
   (let [owner (atom nil)]
-    (fn [{:chequer/keys [db cfg] :as req}]
-      (let [{:keys [name title]} (get-in cfg [:auth :single])
-            user (or @owner
-                     (reset! owner (users/ensure-user! db {:subject "owner" :name name :title title})))
+    (fn wrapper
+      [{:chequer/keys [db cfg] :as req}]
+      (let [single-auth (get-in cfg [:auth :single])
+            owner-name (:name single-auth)
+            title (:title single-auth)
+            user (or @owner (reset! owner (users/ensure-user! db {:subject "owner", :name owner-name, :title title})))
             user (reset! owner (users/touch-last-seen! db user))]
         (handler (assoc req :chequer/user user))))))
 
@@ -81,7 +84,8 @@
 (defn- proxy-mode
   "Middleware that trusts the configured header, but only from trusted proxy addresses."
   [handler]
-  (fn [{:chequer/keys [db cfg] :keys [remote-addr headers] :as req}]
+  (fn wrapper
+    [{:chequer/keys [db cfg] :keys [remote-addr headers] :as req}]
     (let [{:keys [header trusted-proxies]} (get-in cfg [:auth :proxy])
           value (some-> (get headers (str/lower-case header)) str/trim)]
       (if (and (trusted? remote-addr trusted-proxies) (not (str/blank? value)))
@@ -93,13 +97,23 @@
 (defn wrap-auth
   "Middleware putting the current user on the request as :chequer/user, according to the
   configured auth mode. Expects :chequer/db and :chequer/cfg on the request."
-  [handler]
-  (let [modes {:single (single-mode handler)
-               :proxy (proxy-mode handler)}]
-    (fn [{:chequer/keys [cfg] :keys [uri] :as req}]
+  [handler auth-cfg]
+  (let [auth-mode (:mode auth-cfg)
+        wrapped (case auth-mode
+                  :single
+                  (single-mode handler)
+
+                  :proxy
+                  (proxy-mode handler)
+
+                  ;; else
+                  (throw (ex-info (str "Unknown authentication mode: " (pr-str auth-mode))
+                                  {:mode auth-mode})))]
+    (fn wrapper
+      [{:keys [uri] :as req}]
       (if (bypass? uri)
         (handler req)
-        ((modes (get-in cfg [:auth :mode])) req)))))
+        (wrapped req)))))
 
 
 (defn- origin-of
@@ -127,7 +141,8 @@
   "CSRF defence: requests other than GET and HEAD must come from the configured base-url's
   origin, else get a 403."
   [handler]
-  (fn [{:chequer/keys [cfg] :keys [request-method headers] :as req}]
+  (fn wrapper
+    [{:chequer/keys [cfg] :keys [request-method headers] :as req}]
     (if (or (#{:get :head} request-method)
             (same-origin-request? (get-in cfg [:server :base-url]) headers))
       (handler req)

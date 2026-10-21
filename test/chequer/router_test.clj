@@ -4,10 +4,24 @@
     [clojure.test :refer [deftest is]]))
 
 
-(defn- h-index [_] {:status 200 :body "index"})
-(defn- h-show [_] {:status 200 :body "show"})
-(defn- h-update [_] {:status 200 :body "update"})
-(defn- h-task [_] {:status 200 :body "task"})
+(defn- h-index
+  [_]
+  {:status 200 :body "index"})
+
+
+(defn- h-show
+  [_]
+  {:status 200 :body "show"})
+
+
+(defn- h-update
+  [_]
+  {:status 200 :body "update"})
+
+
+(defn- h-task
+  [_]
+  {:status 200 :body "task"})
 
 
 (def ^:private routes

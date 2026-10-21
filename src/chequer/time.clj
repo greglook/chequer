@@ -3,7 +3,8 @@
   (:require
     [tick.core :as t])
   (:import
-    (java.time ZoneId)))
+    (java.time
+      ZoneId)))
 
 
 (def ^:dynamic *now-ms*

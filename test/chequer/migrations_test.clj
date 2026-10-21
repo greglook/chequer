@@ -98,8 +98,8 @@
     (fn [d _]
       (db/migrate! d)
       (is (thrown? Exception
-                   (db/with-tx [tx d]
-                     (db/insert! tx :event {:instant 1 :user_id 99 :entity_type "plan" :entity_id 1 :action "created"}))))
+            (db/with-tx [tx d]
+              (db/insert! tx :event {:instant 1 :user_id 99 :entity_type "plan" :entity_id 1 :action "created"}))))
       (let [uid (:result (db/with-tx [tx d]
                            (db/insert! tx :user {:subject "owner" :name "owner" :title "Owner" :created_at 1 :last_seen 1})))]
         (is (pos? (:result (db/with-tx [tx d]

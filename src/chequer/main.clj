@@ -4,7 +4,8 @@
     [chequer.config :as config]
     [chequer.core :as core]
     [clojure.string :as str]
-    [clojure.tools.cli :as cli]))
+    [clojure.tools.cli :as cli]
+    [jolt.host :as host]))
 
 
 (def ^:private cli-options
@@ -54,6 +55,6 @@
             {:keys [host port]} (get-in cfg [:server :listen])
             sys (core/start! cfg)]
         (println (str "Chequer listening on " host ":" port))
-        (jolt.host/block-sigint)
-        (jolt.host/park-until-interrupt)
+        (host/block-sigint)
+        (host/park-until-interrupt)
         (core/stop! sys)))))

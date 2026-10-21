@@ -13,8 +13,8 @@
 
 (defn- name-taken?
   "True if a user other than self-id has the given name."
-  [tx name self-id]
-  (some? (jdbc/fetch-one tx ["SELECT 1 FROM user WHERE name = ? AND id IS NOT ?" name self-id])))
+  [tx user-name self-id]
+  (some? (jdbc/fetch-one tx ["SELECT 1 FROM user WHERE name = ? AND id IS NOT ?" user-name self-id])))
 
 
 (defn- free-name
@@ -32,16 +32,16 @@
 (defn ensure-user!
   "Find the user with subject, creating them if needed and refreshing name and title
   otherwise. A name used by another user gets the first free numeric suffix. Returns the user row."
-  [db {:keys [subject name title]}]
+  [db {user-name :name :keys [subject title]}]
   (:result
     (db/with-tx [tx db]
       (if-let [existing (jdbc/fetch-one tx ["SELECT * FROM user WHERE subject = ?" subject])]
-        (let [new-name (free-name tx name (:id existing))]
+        (let [new-name (free-name tx user-name (:id existing))]
           (jdbc/execute! tx ["UPDATE user SET name = ?, title = ? WHERE id = ?" new-name title (:id existing)])
           (by-id tx (:id existing)))
         (let [now (time/now-ms)
               id (db/insert! tx :user {:subject subject
-                                       :name (free-name tx name nil)
+                                       :name (free-name tx user-name nil)
                                        :title title
                                        :created_at now
                                        :last_seen now})]

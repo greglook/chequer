@@ -92,5 +92,17 @@ description: Build/extend a Jolt (Clojure on Chez Scheme) ring web app with ring
 - Spiking: write a scratch file to /tmp and run `jolt -M -e '(load-file "/tmp/spike.clj")'` to probe library behavior quickly before writing the tests.
 - Don't leave the app's runtime files (chequer.db*, *.ini) staged: smoke-test with a config under /tmp and kill the server afterwards (`pkill -f`; verify with pgrep).
 
+## Test runner, lint and format
+- Prefer a `bin/test` wrapper (`exec jolt -M:test -m cognitect.test-runner "$@"`, with a `:test` alias adding the `test` path and the cognitect-labs/test-runner git dep). `jolt test` only works if deps.edn has a `:tasks` map; otherwise it errors "unknown command or task: test", and bare `jolt -M:test` just opens a REPL. Check exit status with `bin/test > /tmp/out 2>&1; echo $?`, not via pipes.
+- `cljstyle check|fix` (config `.cljstyle`; add `{#"(^|/)with-.*" [[:block 1]]}` indents for with-* macros) and `clj-kondo --lint src test`.
+- Macros that bind symbols (e.g. `with-tx [tx db]`) need `:lint-as {my.ns/with-tx clojure.core/let}` in `.clj-kondo/config.edn`; `jolt.host` needs `:unresolved-namespace {:exclude [jolt.host]}`.
+- With `:shadowed-var` on, don't name params `name`/`handler` when they shadow core vars or the enclosing defn; use `user-name`, `next-handler`, or destructure `{route-handler :handler}`.
+- Edit files with the edit/write tools, never python/sed via bash (user objected).
+
 ## Verification
+Note (Chequer): `jolt test` only exists if deps.edn defines a `:tasks` map; otherwise it fails with "unknown command or task: test", and `jolt -M:test` alone just opens a REPL that runs nothing. Preferred setup: a `:test` alias with `:extra-paths ["test"]` plus cognitect-labs/test-runner (pinned by `:git/sha`), and a `bin/test` wrapper doing `exec jolt -M:test -m cognitect.test-runner "$@"` (`-n my.ns-test` runs one namespace). Judge success from the "Ran N tests... 0 failures, 0 errors" line; `${pipestatus[1]}` printed empty under zsh here.
+
+When a function/middleware signature changes (e.g. `wrap-auth` gaining a construction-time config arg), grep every call site in src and test, update all in one pass, and re-run the whole suite. Use the edit tools rather than a bash python3 heredoc, which leaves the harness with no recorded file mutations.
+
+Original note:
 `bin/test` (or `jolt test` on older scaffolds) — expect "0 failures, 0 errors" and exit 0.

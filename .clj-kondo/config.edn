@@ -1,4 +1,7 @@
-{:linters
+{:lint-as
+ {chequer.db/with-tx clojure.core/let}
+
+ :linters
  {:consistent-alias
   {:level :warning
    :aliases {clojure.java.io io

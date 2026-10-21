@@ -66,16 +66,17 @@
 (defn handler
   "The application's ring handler for the running system sys ({:db .. :cfg ..})."
   [sys]
-  (-> (router/handler routes)
-      auth/wrap-auth
-      auth/wrap-origin-check
-      wrap-static
-      (wrap-system sys)))
+  (let [cfg (:cfg sys)]
+    (-> (router/handler routes)
+        (auth/wrap-auth (:auth cfg))
+        (auth/wrap-origin-check)
+        (wrap-static)
+        (wrap-system sys))))
 
 
 (defn wrap-request-log
   "Middleware logging method, uri, status and elapsed time of each request to stderr."
-  [handler]
+  [next-handler]
   (fn [{:keys [request-method uri query-string] :as req}]
     (let [start (System/nanoTime)
           log (fn [outcome]
@@ -85,7 +86,7 @@
                            outcome)))
           elapsed #(str (quot (- (System/nanoTime) start) 1000000) "ms")]
       (try
-        (let [resp (handler req)]
+        (let [resp (next-handler req)]
           (log (str (:status resp) " " (elapsed)))
           resp)
         (catch Exception e

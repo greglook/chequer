@@ -56,9 +56,9 @@
   (with-db
     (fn [d]
       (is (thrown-with-msg? Exception #"boom"
-                            (db/with-tx [tx d]
-                              (db/insert! tx :thing {:name "a"})
-                              (throw (ex-info "boom" {})))))
+            (db/with-tx [tx d]
+              (db/insert! tx :thing {:name "a"})
+              (throw (ex-info "boom" {})))))
       (is (nil? (db/q1 d ["SELECT id FROM thing"])))
       (is (= {:result 1 :topics #{}} (db/with-tx [tx d] (db/insert! tx :thing {:name "b"})))
           "the writer is usable after a rollback"))))
