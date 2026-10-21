@@ -27,6 +27,21 @@ description: Build/extend a Jolt (Clojure on Chez Scheme) ring web app with ring
 - Git deps need full SHAs. First run fetches deps into ~/.jolt/gitlibs and is slow — use long timeouts (≥900s).
 - `jolt run` is a builtin command, so name the server task `serve`.
 
+## Testing with cognitect test-runner
+- Add `io.github.cognitect-labs/test-runner` (git tag v0.5.1, full sha) under the :test alias :extra-deps and make bin/test `exec jolt -M:test -m cognitect.test-runner "$@"`; then `bin/test -n my.ns-test` runs one namespace. Missing src ns shows as FileNotFoundException "Could not locate x.jolt (or .clj/.cljc)" — that is the red step in TDD.
+- Check the real exit status: `bin/test > log 2>&1; echo exit=$?` (not through `| tail`).
+- SQLite tests: temp file path under java.io.tmpdir, delete the file and its -wal/-shm/.bak siblings afterwards.
+
+## SQLite via jolt-lang/db
+- `(:require [db.jdbc] [jdbc.core :as jdbc])` in that order. Writer connection behind `locking`, reader pool in an atom; `jdbc/atomic-apply` for tx; `{:returning true}` on insert!; migrations keyed on PRAGMA user_version with `VACUUM INTO` backup.
+- `(into [:map ...])` with one arg throws in Jolt; build vectors literally.
+
+## Adding libs / probing
+- Probe a lib before building on it: write /tmp/probe.clj with `(require ...)` + printlns, run `jolt -M:test -e '(load-file "/tmp/probe.clj")'` (first run slow, then ~10s).
+- Pins known to load: jolt-lang/db (SQLite via `db.jdbc` + `jdbc.core`), io.github.jolt-lang/time (tick), metosin/malli, org.clojure/tools.cli, cognitect-labs/test-runner. Copy the SHAs from /tmp clones of jolt-lang/examples `ring-app/deps.edn`; for annotated tags use the peeled (`^{}`) SHA from `git ls-remote`.
+- jdbc: require `db.jdbc` before `jdbc.core`; `jdbc/connection "sqlite:path"`; `fetch` for row-returning PRAGMAs, `execute!` otherwise; `jdbc/atomic` = `atomic-apply` with rollback on throw; `VACUUM INTO ?` works with a param.
+- ring-chez adapter `run-server` takes `:host` (default loopback) and `:port`.
+
 ## Server / handler
 - `(adapter/run-server handler {:port p})` returns a handle and serves on background threads; binds 127.0.0.1 by default (`:host`).
 - Keep -main alive: `(jolt.host/block-sigint) (jolt.host/park-until-interrupt) (adapter/stop-server server)`.
@@ -57,5 +72,17 @@ description: Build/extend a Jolt (Clojure on Chez Scheme) ring web app with ring
 - Other opts: `:host` (default loopback), `:keep-alive-timeout-ms` 30000, `:max-request-bytes` 1 MiB, `:max-header-bytes` 8192, `:trust-proxy N` (peer addr kept at `:ring-chez/peer-addr`), `:remote-addr` from accept().
 - Channel body = chunked stream; on client disconnect the channel is closed, so `sse/send!` / `>!!` returns false — use that to drop dead subscribers. Middleware ns: `ring-chez.middleware.{gzip,static,proxy,multipart}`. README "Streaming responses"/"Server-Sent Events" sections (~line 505) document this.
 
+## Testing with cognitect test-runner
+- Add `io.github.cognitect-labs/test-runner` (git tag v0.5.1, full sha) under the `:test` alias `:extra-deps` + `:extra-paths ["test"]`; run `jolt -M:test -m cognitect.test-runner [-n ns]` (wrap in `bin/test`). It finds `test/**/*_test.clj`, so no hand-written `-main`. Check the real exit status (`${PIPESTATUS[0]}`), not `| tail`.
+- A test requiring a missing ns fails with "Could not locate x/y.jolt (or .clj/.cljc)" — that is the TDD red step.
+- The server entry is `bin/run` = `jolt -m <app>.main "$@"`; block with `(jolt.host/block-sigint)` + `(jolt.host/park-until-interrupt)`, then stop cleanly. In smoke tests stop the server with a plain `kill <pid>`; backgrounding servers inside one bash tool call can hang the call, so start it, then inspect in a separate call.
+
+## SQLite via jdbc.core (verified)
+- `jdbc/connection "sqlite:<path>"`; PRAGMAs via `jdbc/execute!` (journal_mode=WAL, foreign_keys=ON, busy_timeout=5000) work per connection; `fetch-one` on `PRAGMA busy_timeout` returns key `:timeout`.
+- `jdbc/atomic-apply conn (fn [tx] ...)` is the function-style transaction (rolls back on throw); `jdbc/atomic` is the body macro. `locking` on an Object works across futures.
+- `VACUUM INTO ?` accepts a sqlvec param (pre-migration backups). `PRAGMA user_version = N` cannot take a param, so build the string.
+- Gotchas: `(into [:map ...])` with one arg throws ArityException in Jolt (no 1-arity `into`); just use the vector. When smoke-testing static handlers for path traversal, pass the path-as-is flag to the HTTP client, since clients normalize `/js/../x`; the handler should use a regex allow-list on flat file names.
+- malli works (`m/explain`, `me/humanize`, `:multi` with `:dispatch`); tools.cli `parse-opts` works.
+
 ## Verification
-`jolt test` (from the project root) — expect "0 failures, 0 errors" and exit 0.
+`bin/test` (or `jolt test` on older scaffolds) — expect "0 failures, 0 errors" and exit 0.

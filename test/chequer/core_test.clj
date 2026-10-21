@@ -1,42 +1,95 @@
 (ns chequer.core-test
   (:require
+    [chequer.config :as config]
     [chequer.core :as core]
-    [clojure.core.async :as async]
+    [chequer.db :as db]
+    [chequer.test-helpers :as helpers]
     [clojure.string :as str]
     [clojure.test :refer [deftest is]]))
 
 
-(defn- request
-  [uri]
-  (core/handler {:request-method :get :uri uri :headers {}}))
+(defn- with-handler
+  "Call f with a ring handler over a migrated temp database."
+  [f]
+  (let [path (helpers/temp-db-path)
+        d (db/open path)
+        cfg (config/normalize {"database" {"path" path}})]
+    (try
+      (db/migrate! d)
+      (f (core/handler {:db d :cfg cfg}))
+      (finally
+        (db/close d)
+        (helpers/delete-db-files path)))))
 
 
-(deftest index-page-loads-datastar
-  (let [r (request "/")]
-    (is (= 200 (:status r)))
-    (is (str/starts-with? (get-in r [:headers "Content-Type"]) "text/html"))
-    (is (str/includes? (:body r) "/js/datastar.js"))
-    (is (str/includes? (:body r) "data-on:click=\"@get(&apos;/hello&apos;)\""))))
+(defn- get-uri
+  [handler uri]
+  (handler {:request-method :get :uri uri :headers {}}))
+
+
+(deftest index-page-loads-datastar-and-css
+  (with-handler
+    (fn [h]
+      (let [r (get-uri h "/")]
+        (is (= 200 (:status r)))
+        (is (str/starts-with? (get-in r [:headers "Content-Type"]) "text/html"))
+        (is (str/includes? (:body r) "/js/datastar.js"))
+        (is (str/includes? (:body r) "/css/app.css"))))))
+
+
+(deftest healthz-reports-ok
+  (with-handler
+    (fn [h]
+      (let [r (get-uri h "/healthz")]
+        (is (= 200 (:status r)))
+        (is (= "ok" (:body r)))))))
+
+
+(deftest healthz-rejects-other-methods
+  (with-handler
+    (fn [h]
+      (is (= 405 (:status (h {:request-method :post :uri "/healthz" :headers {}})))))))
 
 
 (deftest serves-datastar-bundle
-  (let [r (request "/js/datastar.js")]
-    (is (= 200 (:status r)))
-    (is (str/starts-with? (get-in r [:headers "Content-Type"]) "text/javascript"))
-    (is (str/starts-with? (:body r) "// Datastar v1.0.4"))))
+  (with-handler
+    (fn [h]
+      (let [r (get-uri h "/js/datastar.js")]
+        (is (= 200 (:status r)))
+        (is (str/starts-with? (get-in r [:headers "Content-Type"]) "text/javascript"))
+        (is (str/starts-with? (:body r) "// Datastar v1.0.4"))))))
 
 
-(deftest hello-streams-patch-elements
-  (let [r (request "/hello")
-        e (async/<!! (:body r))]
-    (is (= "text/event-stream" (get-in r [:headers "Content-Type"])))
-    (is (str/includes? e "event: datastar-patch-elements"))
-    (is (str/includes? e "data: elements <p id=\"greeting\">"))
-    (is (nil? (async/<!! (:body r))) "stream closes after the patch")))
+(deftest serves-stylesheet
+  (with-handler
+    (fn [h]
+      (let [r (get-uri h "/css/app.css")]
+        (is (= 200 (:status r)))
+        (is (str/starts-with? (get-in r [:headers "Content-Type"]) "text/css"))))))
+
+
+(deftest static-files-reject-unknown-types-and-traversal
+  (with-handler
+    (fn [h]
+      (is (= 404 (:status (get-uri h "/js/missing.js"))))
+      (is (= 404 (:status (get-uri h "/js/../css/app.css"))))
+      (is (= 404 (:status (get-uri h "/css/../../deps.edn"))))
+      (is (= 404 (:status (get-uri h "/js/")))))))
 
 
 (deftest unknown-path-is-404
-  (is (= 404 (:status (request "/nope")))))
+  (with-handler
+    (fn [h]
+      (is (= 404 (:status (get-uri h "/nope")))))))
+
+
+(deftest wrap-system-puts-db-and-cfg-on-the-request
+  (let [sys {:db :the-db :cfg :the-cfg}
+        seen (atom nil)
+        h (core/wrap-system (fn [req] (reset! seen req) {:status 200}) sys)]
+    (h {:request-method :get :uri "/"})
+    (is (= :the-db (:chequer/db @seen)))
+    (is (= :the-cfg (:chequer/cfg @seen)))))
 
 
 (defn- logged
@@ -68,3 +121,16 @@
                         {:request-method :get :uri "/x" :headers {}})]
     (is (= "boom" (ex-message r)) "exception is rethrown")
     (is (re-matches #"GET /x ERROR \d+ms boom\n" out))))
+
+
+(deftest start-and-stop-run-the-system
+  (let [path (helpers/temp-db-path)
+        cfg (config/normalize {"database" {"path" path}
+                               "server" {"listen" "127.0.0.1:0"}})
+        sys (core/start! cfg)]
+    (try
+      (is (= cfg (:cfg sys)))
+      (is (= 1 (:user_version (db/q1 (:db sys) ["PRAGMA user_version"]))) "migrated on start")
+      (finally
+        (core/stop! sys)
+        (helpers/delete-db-files path)))))

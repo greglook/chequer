@@ -1,0 +1,7 @@
+{
+  "permission": {
+    "rules": [
+      { "op": "execute", "match:" "bin/test *", "effect": "allow" }
+    ]
+  }
+}

@@ -1,14 +1,16 @@
 (ns chequer.core
+  "System wiring: the ring handler, middleware, and server start and stop."
   (:require
-    [clojure.core.async :as async]
+    [chequer.db :as db]
+    [chequer.router :as router]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [hiccup2.core :as h]
-    [ring-chez.adapter :as adapter]
-    [ring-chez.sse :as sse]))
+    [ring-chez.adapter :as adapter]))
 
 
 (defn- page
+  "Render the placeholder application shell as an HTML string."
   []
   (str "<!DOCTYPE html>"
        (h/html
@@ -17,46 +19,73 @@
            [:meta {:charset "utf-8"}]
            [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
            [:title "Chequer"]
+           [:link {:rel "stylesheet" :href "/css/app.css"}]
            [:script {:type "module" :src "/js/datastar.js"}]]
           [:body
-           [:h1 "Chequer"]
-           [:button {:data-on:click "@get('/hello')"} "Say hello"]
-           [:p#greeting]]])))
+           [:h1 "Chequer"]]])))
 
 
-(defn- hello
-  []
-  (let [ch (async/chan 1)]
-    (async/>!! ch (sse/format-event
-                    {:event "datastar-patch-elements"
-                     :data (str "elements " (h/html [:p#greeting "Hello from the server!"]))}))
-    (async/close! ch)
-    (sse/event-response ch)))
+(defn- index
+  "GET / handler: the application shell."
+  [_]
+  {:status 200
+   :headers {"Content-Type" "text/html; charset=utf-8"}
+   :body (page)})
+
+
+(defn- healthz
+  "GET /healthz handler: 200 ok once the database answers SELECT 1."
+  [{:chequer/keys [db]}]
+  (db/q1 db ["SELECT 1"])
+  {:status 200
+   :headers {"Content-Type" "text/plain; charset=utf-8"}
+   :body "ok"})
+
+
+(def ^:private routes
+  "Application routes as [method path-pattern handler]."
+  [[:get [] index]
+   [:get ["healthz"] healthz]])
+
+
+(def ^:private static-content-types
+  "Allow-list of static file extensions and their Content-Type."
+  {"js" "text/javascript; charset=utf-8"
+   "css" "text/css; charset=utf-8"})
+
+
+(defn wrap-static
+  "Serve files under /js/ and /css/ from resources/public. Only a flat file name with
+  an allow-listed extension is served; anything else falls through to handler."
+  [handler]
+  (fn [{:keys [request-method uri] :as req}]
+    (let [[_ dir file ext] (re-matches #"/(js|css)/([A-Za-z0-9_-][A-Za-z0-9._-]*\.(js|css))" uri)
+          resource (when (and (= :get request-method) file)
+                     (io/resource (str "public/" dir "/" file)))]
+      (if (and resource (= dir ext))
+        {:status 200
+         :headers {"Content-Type" (static-content-types ext)}
+         :body (slurp resource)}
+        (handler req)))))
+
+
+(defn wrap-system
+  "Put the database and config on each request as :chequer/db and :chequer/cfg."
+  [handler {:keys [db cfg]}]
+  (fn [req]
+    (handler (assoc req :chequer/db db :chequer/cfg cfg))))
 
 
 (defn handler
-  [{:keys [request-method uri]}]
-  (case [request-method uri]
-    [:get "/"]
-    {:status 200
-     :headers {"Content-Type" "text/html; charset=utf-8"}
-     :body (page)}
-
-    [:get "/hello"]
-    (hello)
-
-    [:get "/js/datastar.js"]
-    {:status 200
-     :headers {"Content-Type" "text/javascript; charset=utf-8"}
-     :body (slurp (io/resource "public/js/datastar.js"))}
-
-    ;; else
-    {:status 404
-     :headers {"Content-Type" "text/plain; charset=utf-8"}
-     :body "Not found"}))
+  "The application's ring handler for the running system sys ({:db .. :cfg ..})."
+  [sys]
+  (-> (router/handler routes)
+      wrap-static
+      (wrap-system sys)))
 
 
 (defn wrap-request-log
+  "Middleware logging method, uri, status and elapsed time of each request to stderr."
   [handler]
   (fn [{:keys [request-method uri query-string] :as req}]
     (let [start (System/nanoTime)
@@ -75,11 +104,24 @@
           (throw e))))))
 
 
-(defn -main
-  [& _]
-  (let [port (or (some-> (System/getenv "PORT") parse-long) 3000)
-        server (adapter/run-server (wrap-request-log handler) {:port port})]
-    (println (str "Chequer listening on http://127.0.0.1:" port))
-    (jolt.host/block-sigint)
-    (jolt.host/park-until-interrupt)
-    (adapter/stop-server server)))
+(defn start!
+  "Open and migrate the database, then start the HTTP server. Returns {:server .. :db .. :cfg ..}."
+  [cfg]
+  (let [d (db/open (get-in cfg [:database :path]))]
+    (try
+      (db/migrate! d)
+      (let [{:keys [host port]} (get-in cfg [:server :listen])
+            sys {:db d :cfg cfg}
+            server (adapter/run-server (wrap-request-log (handler sys))
+                                       {:host host :port port})]
+        (assoc sys :server server))
+      (catch Exception e
+        (db/close d)
+        (throw e)))))
+
+
+(defn stop!
+  "Stop the HTTP server and close the database of a system returned by start!."
+  [{:keys [server db]}]
+  (adapter/stop-server server)
+  (db/close db))
