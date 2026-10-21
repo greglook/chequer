@@ -1,36 +1,23 @@
 (ns chequer.core
   "System wiring: the ring handler, middleware, and server start and stop."
   (:require
+    [chequer.auth :as auth]
     [chequer.db :as db]
     [chequer.router :as router]
+    [chequer.web.layout :as layout]
     [clojure.java.io :as io]
     [clojure.string :as str]
-    [hiccup2.core :as h]
     [ring-chez.adapter :as adapter]))
 
 
-(defn- page
-  "Render the placeholder application shell as an HTML string."
-  []
-  (str "<!DOCTYPE html>"
-       (h/html
-         [:html {:lang "en"}
-          [:head
-           [:meta {:charset "utf-8"}]
-           [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
-           [:title "Chequer"]
-           [:link {:rel "stylesheet" :href "/css/app.css"}]
-           [:script {:type "module" :src "/js/datastar.js"}]]
-          [:body
-           [:h1 "Chequer"]]])))
-
-
 (defn- index
-  "GET / handler: the application shell."
-  [_]
+  "GET / handler: the lists page."
+  [req]
   {:status 200
    :headers {"Content-Type" "text/html; charset=utf-8"}
-   :body (page)})
+   :body (layout/page req "Lists"
+                      [:h1 "Lists"]
+                      [:p.empty "No lists yet."])})
 
 
 (defn- healthz
@@ -80,6 +67,8 @@
   "The application's ring handler for the running system sys ({:db .. :cfg ..})."
   [sys]
   (-> (router/handler routes)
+      auth/wrap-auth
+      auth/wrap-origin-check
       wrap-static
       (wrap-system sys)))
 

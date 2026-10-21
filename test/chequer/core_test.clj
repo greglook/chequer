@@ -48,7 +48,8 @@
 (deftest healthz-rejects-other-methods
   (with-handler
     (fn [h]
-      (is (= 405 (:status (h {:request-method :post :uri "/healthz" :headers {}})))))))
+      (is (= 405 (:status (h {:request-method :post :uri "/healthz"
+                              :headers {"origin" "http://127.0.0.1:3000"}})))))))
 
 
 (deftest serves-datastar-bundle
@@ -134,3 +135,26 @@
       (finally
         (core/stop! sys)
         (helpers/delete-db-files path)))))
+
+
+(deftest index-page-shows-the-current-user-and-empty-state
+  (with-handler
+    (fn [h]
+      (let [r (get-uri h "/")]
+        (is (str/includes? (:body r) "Owner"))
+        (is (str/includes? (:body r) "No lists yet"))))))
+
+
+(deftest static-files-need-no-user
+  (with-handler
+    (fn [h]
+      (is (= 200 (:status (get-uri h "/css/app.css")))))))
+
+
+(deftest mutating-requests-need-a-matching-origin
+  (with-handler
+    (fn [h]
+      (is (= 403 (:status (h {:request-method :post :uri "/x" :headers {}}))))
+      (is (= 404 (:status (h {:request-method :post :uri "/x"
+                              :headers {"origin" "http://127.0.0.1:3000"}})))
+          "a same-origin POST reaches the router"))))

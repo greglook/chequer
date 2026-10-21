@@ -84,5 +84,13 @@ description: Build/extend a Jolt (Clojure on Chez Scheme) ring web app with ring
 - Gotchas: `(into [:map ...])` with one arg throws ArityException in Jolt (no 1-arity `into`); just use the vector. When smoke-testing static handlers for path traversal, pass the path-as-is flag to the HTTP client, since clients normalize `/js/../x`; the handler should use a regex allow-list on flat file names.
 - malli works (`m/explain`, `me/humanize`, `:multi` with `:dispatch`); tools.cli `parse-opts` works.
 
+## Time zones and IP parsing quirks (tick on Jolt)
+- `tick.core/zone` / `t/in` accept any syntactically valid region ("Nope/Zone"); `(t/zone "")` throws IndexOutOfBounds, `"../../etc"` throws. Validate user-supplied zones with `(.contains (ZoneId/getAvailableZoneIds) id)`.
+- `(t/instant ms)` works for epoch ms, not for LocalDate. Format: `(t/format (t/formatter "EEE d MMM yyyy, HH:mm") (t/in (t/instant ms) "UTC"))`.
+- `InetAddress/getByName` performs DNS on non-literals; gate with an IP-literal regex before using it for CIDR checks. `.getAddress` returns bytes (as signed? compare via vec/bit-and with 0xff masks).
+- Middleware ordering: when adding an Origin/CSRF check or auth middleware, existing handler tests that POST without Origin start returning 403; update them to send a matching Origin.
+- Spiking: write a scratch file to /tmp and run `jolt -M -e '(load-file "/tmp/spike.clj")'` to probe library behavior quickly before writing the tests.
+- Don't leave the app's runtime files (chequer.db*, *.ini) staged: smoke-test with a config under /tmp and kill the server afterwards (`pkill -f`; verify with pgrep).
+
 ## Verification
 `bin/test` (or `jolt test` on older scaffolds) — expect "0 failures, 0 errors" and exit 0.

@@ -249,8 +249,10 @@ same-origin is allowed; no Origin and no Sec-Fetch-Site is blocked.
 - `(page req title & body)` renders the doctype, head (Datastar module and
   CSS), an inline tz-cookie script that only sets the cookie if it differs, a
   nav with Lists, Plans, Search and the user title, then `[:main body]`.
-- `(viewer-tz req)` reads the `tz` cookie, checks it by trying `tick.core/zone` on it, and falls back to
-  the config value if that throws.
+- `(viewer-tz req)` reads the `tz` cookie, checks it with `chequer.time/valid-zone?`, and falls back to
+  the config value if it isn't valid. `tick.core/zone` can't do the check: on Jolt it accepts any
+  syntactically valid region such as `Nope/Zone`, so `valid-zone?` tests membership in
+  `ZoneId/getAvailableZoneIds` instead.
 - `(format-instant ms tz)` gives "Mon 3 Mar 2025, 14:05". `(relative ms now)`
   gives "in 2 days" or "3 hours ago" for due dates.
 - `GET /` renders an empty-state Lists page.

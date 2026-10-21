@@ -4,3 +4,21 @@ body {
   max-width: 48rem;
   padding: 1rem;
 }
+
+nav {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+nav .user {
+  margin-left: auto;
+  color: #555;
+}
+
+.empty {
+  color: #666;
+}
