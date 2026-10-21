@@ -5,4 +5,6 @@ set -e
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-exec jolt -m chequer.main "$@"
+mkdir -p dev/state
+
+exec jolt -m chequer.main --config dev/chequer.ini "$@"

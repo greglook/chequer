@@ -1,11 +1,10 @@
-# Dependencies
-.jolt/
-
-# Build Tooling
-.clj-kondo/.cache
-.cpcache
+# Dev Tooling
+dev/state/
 .dirge/sessions/
+.clj-kondo/.cache/
+.cpcache
 .nrepl-*
 
 # Build Output
-/target
+.jolt/
+/target/
