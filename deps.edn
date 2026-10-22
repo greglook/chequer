@@ -24,6 +24,11 @@
    :git/tag "v1.1.230"
    :git/sha "717e187ec98e6a75c7f26a3120fbe9eecc434f05"}
 
+  org.clojure/tools.logging
+  {:git/url "https://github.com/jolt-lang/logging"
+   :git/tag "v0.0.2"
+   :git/sha "ec6747e55583118d881faf4ab41e68d7e587ce4c"}
+
   org.clojure/data.json
   {:git/url "https://github.com/clojure/data.json.git"
    :git/sha "1fce9070ee851f49a6c4ce6e1c0bb0db4d7594a0"}

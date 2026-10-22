@@ -88,12 +88,19 @@ description: Build/extend a Jolt (Clojure on Chez Scheme) ring web app with ring
 - Keep -main alive: `(jolt.host/block-sigint) (jolt.host/park-until-interrupt) (adapter/stop-server server)`.
 - Static file: `(slurp (io/resource "public/js/datastar.js"))`.
 - SSE: response body may be a core.async channel. Use `ring-chez.sse/event-response ch` and `sse/format-event {:event "datastar-patch-elements" :data (str "elements " html)}`; close the channel to end the stream.
-- Middleware is plain fn wrapping; log via `(binding [*out* *err*] (println ...))`, time with `System/nanoTime`.
+- Middleware is plain fn wrapping; time with `System/nanoTime`. Log with `clojure.tools.logging` (see "Logging" below), not println to *err*.
+
+## Logging (clojure.tools.logging on jolt)
+- The upstream org.clojure/tools.logging git dep does NOT load under jolt, and the library isn't built in ("Could not locate clojure/tools/logging"). Use the jolt port under the same coord: `org.clojure/tools.logging {:git/url "https://github.com/jolt-lang/logging" :git/tag "v0.0.2" :git/sha "ec6747e55583118d881faf4ab41e68d7e587ce4c"}` (as in jolt-lang/examples ring-app/deps.edn). Don't probe by cloning; check the examples repo first.
+- Same API (`log/info`, `log/error`, `logf`, `spy`, `with-logs`); stderr backend prints `LEVEL ns - message` at :info and above (debug/trace suppressed; rebind `clojure.tools.logging.impl/*level*`).
+- Testing log output: bind `log/*logger-factory*` to a `reify clojure.tools.logging.impl/LoggerFactory` (`name`, `get-logger`) returning a `reify Logger` (`enabled?`, `write! [_ level throwable message]`) that conj's `[level message]` into an atom; assert on level and message (no trailing newline). Capturing `*err*` no longer works because the backend writes via `__eprint`.
+- cljstyle wants blank lines between multi-line reify methods and arg vectors on their own line; check with `cljstyle check` and fix by hand.
+- Keep user-facing CLI output (help, migrate results) as println; log only operational events.
 
 ## Testing
 - clojure.test; call the handler directly with `{:request-method :get :uri "/" :headers {}}`. For SSE, `async/<!!` on `(:body r)`; returns nil after close.
 - Test ns `-main` runs `run-tests` and throws `ex-info` when fail+error > 0 (non-zero exit).
-- Capture stderr with `(binding [*err* (java.io.StringWriter.)] ...)`.
+- Capture stderr from plain println with `(binding [*err* (java.io.StringWriter.)] ...)`; for tools.logging output use the `*logger-factory*` binding instead.
 - Run `bin/test` unpiped so the exit status is real, or check `${PIPESTATUS[0]}` under bash.
 - Smoke test: start the server (`bin/run`, or the built binary with a /tmp config) as a background shell, poll the port with an HTTP client until it answers, request the SSE route without buffering, read the shell output for log lines, then kill the shell.
 

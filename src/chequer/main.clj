@@ -7,6 +7,7 @@
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.tools.cli :as cli]
+    [clojure.tools.logging :as log]
     [jolt.host :as host]))
 
 
@@ -79,7 +80,7 @@
   [cfg]
   (let [{:keys [host port]} (get-in cfg [:server :listen])
         sys (core/start! cfg)]
-    (println (str "Chequer listening on " host ":" port))
+    (log/info (str "Chequer listening on " host ":" port))
     (host/block-sigint)
     (host/park-until-interrupt)
     (core/stop! sys)))

@@ -9,6 +9,7 @@
     [chequer.web.plans :as plans]
     [clojure.java.io :as io]
     [clojure.string :as str]
+    [clojure.tools.logging :as log]
     [ring-chez.adapter :as adapter]
     [ring.middleware.cookies :refer [wrap-cookies]]
     [ring.middleware.not-modified :refer [wrap-not-modified]]
@@ -92,22 +93,21 @@
 
 
 (defn wrap-request-log
-  "Middleware logging method, uri, status and elapsed time of each request to stderr."
+  "Middleware logging method, uri, status and elapsed time of each request."
   [next-handler]
   (fn [{:keys [request-method uri query-string] :as req}]
     (let [start (System/nanoTime)
-          log (fn [outcome]
-                (binding [*out* *err*]
-                  (println (str/upper-case (name request-method))
-                           (cond-> uri query-string (str "?" query-string))
-                           outcome)))
+          describe (fn [outcome]
+                     (str (str/upper-case (name request-method)) " "
+                          (cond-> uri query-string (str "?" query-string)) " "
+                          outcome))
           elapsed #(str (quot (- (System/nanoTime) start) 1000000) "ms")]
       (try
         (let [resp (next-handler req)]
-          (log (str (:status resp) " " (elapsed)))
+          (log/info (describe (str (:status resp) " " (elapsed))))
           resp)
         (catch Exception e
-          (log (str "ERROR " (elapsed) " " (ex-message e)))
+          (log/error (describe (str "ERROR " (elapsed) " " (ex-message e))))
           (throw e))))))
 
 

@@ -5,7 +5,9 @@
     [chequer.db :as db]
     [chequer.test-helpers :as helpers]
     [clojure.string :as str]
-    [clojure.test :refer [deftest is]]))
+    [clojure.test :refer [deftest is]]
+    [clojure.tools.logging :as log]
+    [clojure.tools.logging.impl :as log-impl]))
 
 
 (defn- with-handler
@@ -94,34 +96,50 @@
 
 
 (defn- logged
-  "Call handler wrapped in the request log; return [response-or-exception log-output]."
+  "Call handler wrapped in the request log; return [response-or-exception entries] where
+  entries is a vector of [level message] captured from clojure.tools.logging."
   [handler req]
-  (let [err (java.io.StringWriter.)
-        result (binding [*err* err]
+  (let [entries (atom [])
+        factory (reify log-impl/LoggerFactory
+                  (name [_] "test")
+
+                  (get-logger
+                    [_ _]
+                    (reify log-impl/Logger
+                      (enabled? [_ _] true)
+
+                      (write! [_ level _ message] (swap! entries conj [level message])))))
+        result (binding [log/*logger-factory* factory]
                  (try ((core/wrap-request-log handler) req)
                       (catch Exception e e)))]
-    [result (str err)]))
+    [result @entries]))
 
 
 (deftest request-log-records-each-request
   (let [resp {:status 201 :body "ok"}
-        [r out] (logged (constantly resp)
-                        {:request-method :post :uri "/lists" :query-string "a=1" :headers {}})]
+        [r [[level message] :as entries]]
+        (logged (constantly resp)
+                {:request-method :post :uri "/lists" :query-string "a=1" :headers {}})]
     (is (= resp r) "response passes through unchanged")
-    (is (re-matches #"POST /lists\?a=1 201 \d+ms\n" out))))
+    (is (= 1 (count entries)))
+    (is (= :info level))
+    (is (re-matches #"POST /lists\?a=1 201 \d+ms" message))))
 
 
 (deftest request-log-omits-empty-query
-  (let [[_ out] (logged (constantly {:status 200})
-                        {:request-method :get :uri "/" :headers {}})]
-    (is (re-matches #"GET / 200 \d+ms\n" out))))
+  (let [[_ [[_ message]]] (logged (constantly {:status 200})
+                                  {:request-method :get :uri "/" :headers {}})]
+    (is (re-matches #"GET / 200 \d+ms" message))))
 
 
 (deftest request-log-records-handler-exceptions
-  (let [[r out] (logged (fn [_] (throw (ex-info "boom" {})))
-                        {:request-method :get :uri "/x" :headers {}})]
+  (let [[r [[level message] :as entries]]
+        (logged (fn [_] (throw (ex-info "boom" {})))
+                {:request-method :get :uri "/x" :headers {}})]
     (is (= "boom" (ex-message r)) "exception is rethrown")
-    (is (re-matches #"GET /x ERROR \d+ms boom\n" out))))
+    (is (= 1 (count entries)))
+    (is (= :error level))
+    (is (re-matches #"GET /x ERROR \d+ms boom" message))))
 
 
 (deftest start-and-stop-run-the-system

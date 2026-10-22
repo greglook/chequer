@@ -9,7 +9,6 @@ A list of miscellaneous items I notice that I want to fix later.
 
 ## Framework
 - Pre-compress the datastar JS file and serve it directly if the request accepts gzip?
-- Adopt `clojure.tools.logging` for more structured logging output
 - HoneySQL for SQL formatting? Depends on how things shape up.
 - Adopt `com.amperity/ken` for better observability?
 
