@@ -57,4 +57,10 @@
    {io.github.cognitect-labs/test-runner
     {:git/url "https://github.com/cognitect-labs/test-runner"
      :git/tag "v0.5.1"
-     :git/sha "dfb30dd6605cb6c0efc275e1df1736f6e90d4d73"}}}}}
+     :git/sha "dfb30dd6605cb6c0efc275e1df1736f6e90d4d73"}}}
+
+  :release
+  {:jolt/build
+   {:opt true
+    :closed-world true
+    :direct-link true}}}}

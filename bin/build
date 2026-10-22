@@ -10,12 +10,7 @@ if [[ $1 = clean ]]; then
 
 elif [[ $1 = release ]]; then
     shift
-    exec jolt build -m chequer.main "$@"
-
-elif [[ $1 = static ]]; then
-    shift
-    echo "NYI" >&2
-    exit 5
+    exec jolt -A:release build -m chequer.main "$@"
 
 else
     echo "Unknown subcommand: $1" >&2
