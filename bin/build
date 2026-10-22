@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# vim: ft=bash
+
+set -e
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+if [[ $1 = clean ]]; then
+    rm -rf target
+
+elif [[ $1 = release ]]; then
+    shift
+    exec jolt build -m chequer.main "$@"
+
+elif [[ $1 = static ]]; then
+    shift
+    echo "NYI" >&2
+    exit 5
+
+else
+    echo "Unknown subcommand: $1" >&2
+    exit 1
+fi

@@ -6,27 +6,31 @@ The first run of any Jolt command fetches and compiles the git dependencies, whi
 
 ## Dev REPL
 
+Start a Jolt REPL:
+
 ```sh
 bin/repl
 ```
 
-Starts a Jolt REPL with the project's `src` and `resources` on the classpath.
-
 ## Dev server
+
+Run the app on `localhost:3000` using the dev config in `dev/chequer.ini`:
 
 ```sh
 bin/run
 ```
 
-Runs the app on `localhost:3000` using the dev config in `dev/chequer.ini`, keeping state (the SQLite database) under `dev/state/`. Extra arguments are passed through to `chequer.main`.
+State is kept (the SQLite database) under `dev/state/`. Extra arguments are passed through to `chequer.main`.
 
 ## Unit tests
+
+Run the unit tests with the Cognitect test runner:
 
 ```sh
 bin/test
 ```
 
-Runs the tests under `test/` with the Cognitect test runner. Arguments are passed through to the runner, for example to run a single namespace or test:
+Arguments are passed through to the runner, for example to run a single namespace or test:
 
 ```sh
 bin/test -n chequer.auth-test
@@ -35,16 +39,37 @@ bin/test -v chequer.auth-test/single-mode-resolves-the-owner
 
 ## Code style
 
+Validate code style with `cljstyle`:
+
 ```sh
+# print non-conforming files and diffs
 cljstyle check
+
+# rewrite files to correct issues
+cljstyle fix
 ```
 
-Reports files that don't match the project's formatting rules (configured in `.cljstyle`). Run `cljstyle fix` to reformat them in place.
+The project's formatting rules are configured in `.cljstyle`.
 
 ## Linting
+
+Run static analysis using `clj-kondo`:
+
 
 ```sh
 clj-kondo --lint src test
 ```
 
-Runs static analysis using the configuration in `.clj-kondo/config.edn`.
+The linting rules are configured in `.clj-kondo/config.edn`.
+
+## Building
+
+Compile the project into a stand-alone binary:
+
+```sh
+# compile project
+bin/build release
+
+# remove build files
+bin/build clean
+```
