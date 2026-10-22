@@ -5,6 +5,7 @@ A list of miscellaneous items I notice that I want to fix later.
 ## Development
 - Get better REPL workflow and setup working
 - Create a gitea action runner image that bakes in node, clojure, and jolt tooling?
+- CI workflow jobs should only run when relevant files have changed
 
 ## Framework
 - Adopt `ring-core` and use middleware from it instead of rolling our own where possible
@@ -19,3 +20,9 @@ A list of miscellaneous items I notice that I want to fix later.
 ## Routes
 - Change `/plan-groups/:id/move?dir=up` to pass the direction in the body
 - Should the `/plan-groups/:id` route be `/plans/:plan/groups/:id` instead?
+
+## Gaps
+- Icons need an emoji picker built in instead of requiring the user to enter one directly
+
+## Bugs
+- Reordering doesn't seem to work yet

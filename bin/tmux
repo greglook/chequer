@@ -23,6 +23,7 @@ fi
 tmux -2 new-session -d -s chequer -x ${COLUMNS:-80} -y ${LINES:-20}
 
 tmux rename-window -t chequer:1 vcs
+tmux send-keys  -t chequer:3 "jj log" C-m
 
 tmux new-window -t chequer:2 -n run
 
