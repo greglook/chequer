@@ -1,16 +1,15 @@
 (ns chequer.web.plans
   "Plan pages, the plan SSE stream, and the plan, group and task mutation handlers."
   (:require
-    [chequer.broker :as broker]
     [chequer.data.plans :as plans]
     [chequer.db :as db]
+    [chequer.live :as live]
     [chequer.markdown :as md]
     [chequer.web.layout :as layout]
-    [clojure.core.async :as async]
     [clojure.data.json :as json]
     [clojure.string :as str]
     [hiccup2.core :as h]
-    [ring-chez.sse :as sse])
+    [jolt.datastar.core :as ds])
   (:import
     java.net.URLDecoder))
 
@@ -22,20 +21,15 @@
   (str (h/html hiccup)))
 
 
-(defn- patch-elements
-  "A datastar-patch-elements event string for markup, with optional extra data lines."
-  ([markup] (patch-elements markup []))
-  ([markup extra-lines]
-   (sse/format-event {:event "datastar-patch-elements"
-                      :data (str/join "\n" (concat extra-lines
-                                                   (map #(str "elements " %) (str/split-lines markup))))})))
+(defn- redirect-script
+  "A script element that sends the browser to path (a server-built path, not user input)."
+  [path]
+  (html [:script {:data-effect "el.remove()"} (h/raw (str "window.location.href = \"" path "\""))]))
 
 
 (defn- redirect-event
-  "An event that sends the browser to path (a server-built path, not user input)."
   [path]
-  (patch-elements (html [:script {:data-effect "el.remove()"} (h/raw (str "window.location.href = \"" path "\""))])
-                  ["mode append" "selector body"]))
+  (ds/patch-elements-event (redirect-script path) "body" "append"))
 
 
 (defn- sse-response
@@ -116,9 +110,10 @@
 (defn- errors-fragment
   "SSE response replacing the error list id with messages from {field message}."
   [id errors]
-  (sse-response [(patch-elements (html [:ul.errors {:id id}
-                                        (for [[k msg] (sort-by key errors)]
-                                          [:li (str (str/capitalize (name k)) " " msg)])]))]))
+  (sse-response [(ds/patch-elements-event (html [:ul.errors {:id id}
+                                                 (for [[k msg] (sort-by key errors)]
+                                                   [:li (str (str/capitalize (name k)) " " msg)])])
+                                          nil "outer")]))
 
 
 (defn- field
@@ -280,32 +275,19 @@
 
 
 (defn show
-  "GET /plans/:id."
-  [{:chequer/keys [db user] :keys [params] :as req}]
-  (let [id (:id params)]
-    (if-let [fragment (render-plan db id user)]
-      (html-response 200
-                     (layout/page req (:title (db/q1 db ["SELECT title FROM plan WHERE id = ?" id]))
-                                  [:div {:data-init (str "@get('/plans/" id "/stream')")} fragment]))
-      (text-response 404 "Not found"))))
-
-
-(defn stream
-  "GET /plans/:id/stream: SSE pushes of the re-rendered plan."
-  [{:chequer/keys [broker user] :keys [params] :as req}]
-  (let [ch (async/chan 64)]
-    (broker/subscribe! broker [:plan (:id params)] ch {:user user :tz (layout/viewer-tz req)})
-    (sse/event-response ch)))
-
-
-(defn plan-events
-  "The SSE events for subscribers of topic: the re-rendered plan, or a redirect to the
-  index when it has been deleted."
-  [db [kind id] {:keys [user]}]
-  (when (= :plan kind)
-    (if-let [fragment (render-plan db id user)]
-      [(patch-elements (html fragment))]
-      [(redirect-event "/plans")])))
+  "GET /plans/:id. The page opens an SSE request to the same URL, which glimmer-datastar
+  re-renders into #live whenever the plan's topic is touched; a deleted plan sends the
+  viewer to the index."
+  [{:chequer/keys [db live user] :keys [params] :as req}]
+  (let [id (:id params)
+        _ @(live/cell live [:plan id])
+        fragment (render-plan db id user)]
+    (cond
+      (:jolt.datastar/sse-request req) (html-response 200 (if fragment (html fragment) (redirect-script "/plans")))
+      fragment (html-response 200
+                              (layout/page req (:title (db/q1 db ["SELECT title FROM plan WHERE id = ?" id]))
+                                           [:div#live (ds/init-opts {:selector "#live"}) fragment]))
+      :else (text-response 404 "Not found"))))
 
 
 ;; ## Mutations
@@ -460,7 +442,6 @@
    [:get ["plans" :id] show]
    [:put ["plans" :id] update-plan]
    [:delete ["plans" :id] delete-plan]
-   [:get ["plans" :id "stream"] stream]
    [:post ["plans" :id "groups"] create-group]
    [:post ["plans" :id "tasks"] create-task]
    [:put ["plan-groups" :id] update-group]

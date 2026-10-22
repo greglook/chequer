@@ -2,8 +2,8 @@
   "System wiring: the ring handler, middleware, and server start and stop."
   (:require
     [chequer.auth :as auth]
-    [chequer.broker :as broker]
     [chequer.db :as db]
+    [chequer.live :as live]
     [chequer.router :as router]
     [chequer.web.layout :as layout]
     [chequer.web.plans :as plans]
@@ -60,23 +60,23 @@
 
 
 (defn wrap-system
-  "Put the database, config and broker on each request as :chequer/db, :chequer/cfg and
-  :chequer/broker."
-  [handler {:keys [db cfg broker]}]
+  "Put the database, config and live state on each request as :chequer/db, :chequer/cfg
+  and :chequer/live."
+  [handler {:keys [db cfg live]}]
   (fn [req]
-    (handler (assoc req :chequer/db db :chequer/cfg cfg :chequer/broker broker))))
+    (handler (assoc req :chequer/db db :chequer/cfg cfg :chequer/live live))))
 
 
 (defn handler
-  "The application's ring handler for the running system sys ({:db .. :cfg .. :broker ..})."
-  [{:keys [cfg db] :as sys}]
-  (let [publish #(broker/publish! (:broker sys) % (partial plans/plan-events db))]
-    (-> (router/handler routes)
-        (broker/wrap-publish publish)
-        (auth/wrap-auth (:auth cfg))
-        (auth/wrap-origin-check)
-        (wrap-static)
-        (wrap-system sys))))
+  "The application's ring handler for the running system sys ({:db .. :cfg .. :live ..})."
+  [{:keys [cfg live] :as sys}]
+  (-> (router/handler routes)
+      (live/wrap-touch live)
+      (auth/wrap-auth (:auth cfg))
+      (auth/wrap-origin-check)
+      (wrap-static)
+      (wrap-system sys)
+      (live/wrap-live live)))
 
 
 (defn wrap-request-log
@@ -101,13 +101,13 @@
 
 (defn start!
   "Open and migrate the database, then start the HTTP server. Returns
-  {:server .. :db .. :cfg .. :broker ..}."
+  {:server .. :db .. :cfg .. :live ..}."
   [cfg]
   (let [db (db/open (get-in cfg [:database :path]))]
     (try
       (db/migrate! db)
       (let [{:keys [host port]} (get-in cfg [:server :listen])
-            sys {:db db :cfg cfg :broker (broker/broker)}
+            sys {:db db :cfg cfg :live (live/live)}
             server (adapter/run-server (wrap-request-log (handler sys))
                                        {:host host :port port})]
         (assoc sys :server server))
@@ -118,6 +118,7 @@
 
 (defn stop!
   "Stop the HTTP server and close the database of a system returned by start!."
-  [{:keys [server db]}]
+  [{:keys [server db live]}]
   (adapter/stop-server server)
+  (live/stop! live)
   (db/close! db))

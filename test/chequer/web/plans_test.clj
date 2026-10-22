@@ -1,10 +1,10 @@
 (ns chequer.web.plans-test
   (:require
-    [chequer.broker :as broker]
     [chequer.config :as config]
     [chequer.core :as core]
     [chequer.data.plans :as plans]
     [chequer.db :as db]
+    [chequer.live :as live]
     [chequer.test-helpers :as helpers]
     [clojure.core.async :as async]
     [clojure.data.json :as json]
@@ -26,8 +26,11 @@
       (let [sys {:db d
                  :cfg (config/normalize {"database" {"path" "unused"}
                                          "server" {"base-url" base-url}})
-                 :broker (broker/broker)}]
-        (f (core/handler sys) sys)))))
+                 :live (live/live)}]
+        (try
+          (f (core/handler sys) sys)
+          (finally
+            (live/stop! (:live sys))))))))
 
 
 (defn- request
@@ -51,12 +54,9 @@
     (parse-long (second (re-find #"^/plans/(\d+)$" (get-in r [:headers "Location"]))))))
 
 
-(defn- drain
+(defn- take-frame
   [ch]
-  (loop [out []]
-    (if-let [v (async/poll! ch)]
-      (recur (conj out v))
-      out)))
+  (first (async/alts!! [ch (async/timeout 2000)])))
 
 
 (deftest index-and-new-pages-render
@@ -119,7 +119,8 @@
           (plans/create-plan-task! tx u {:plan-id pid :title "Passport"}))
         (let [{:keys [status body]} (request h :get (str "/plans/" pid))]
           (is (= 200 status))
-          (is (str/includes? body (str "data-init=\"@get(&apos;/plans/" pid "/stream&apos;)\"")))
+          (is (str/includes? body "datastar-sse=true"))
+          (is (str/includes? body "id=\"live\""))
           (is (str/includes? body (str "id=\"plan-" pid "\"")))
           (is (str/includes? body (str "id=\"plan-group-" g "\"")))
           (is (str/includes? body "Socks"))
@@ -142,26 +143,26 @@
 
 (deftest stream-subscribers-receive-the-re-rendered-plan
   (with-app
-    (fn [h sys]
+    (fn [h _]
       (let [pid (create-plan! h "Packing")
-            stream (request h :get (str "/plans/" pid "/stream"))
+            stream (request h :get (str "/plans/" pid "?datastar-sse=true&datastar-selector=%23live"))
             ch (:body stream)]
-        (is (= "text/event-stream" (get-in stream [:headers "Content-Type"])))
-        (is (= 1 (count (get @(:broker sys) [:plan pid]))))
+        (is (= "text/event-stream; charset=utf-8" (get-in stream [:headers "Content-Type"])))
+        (let [first-frame (take-frame ch)]
+          (is (str/includes? first-frame "data: selector #live"))
+          (is (str/includes? first-frame (str "id=\"plan-" pid "\"")))
+          (is (not (str/includes? first-frame "<html")) "the stream renders the fragment, not the page"))
         (let [r (request h :put (str "/plans/" pid) {:title "Packing list"})
-              events (drain ch)]
+              frame (take-frame ch)]
           (is (= 204 (:status r)))
-          (is (= 1 (count events)))
-          (is (str/includes? (first events) "event: datastar-patch-elements"))
-          (is (str/includes? (first events) (str "id=\"plan-" pid "\"")))
-          (is (str/includes? (first events) "Packing list")))
+          (is (str/includes? frame "event: datastar-patch-elements"))
+          (is (str/includes? frame "Packing list")))
         (testing "a delete redirects subscribers to the index"
           (is (= 204 (:status (request h :delete (str "/plans/" pid)))))
-          (let [events (drain ch)]
-            (is (some #(and (str/includes? % "datastar-patch-elements")
-                            (str/includes? % "window.location")
-                            (str/includes? % "/plans"))
-                      events))))))))
+          (let [frame (take-frame ch)]
+            (is (str/includes? frame "window.location"))
+            (is (str/includes? frame "/plans"))))
+        (async/close! ch)))))
 
 
 (deftest groups-and-tasks-can-be-edited-moved-and-deleted
@@ -213,4 +214,8 @@
         (is (= 400 (:status (h {:request-method :put :uri (str "/plans/" pid)
                                 :headers {"origin" base-url "content-type" "application/json"}
                                 :body (ByteArrayInputStream. (.getBytes "{\"icon\":\"\\ud83e\\uddf3\"}" "UTF-8"))})))
-            "Jolt's data.json can't read surrogate-pair escapes; that must be a 400, not a 500")))))
+            "Jolt's data.json can't read surrogate-pair escapes; that must be a 400, not a 500")
+        (is (= 400 (:status (h {:request-method :put :uri (str "/plans/" pid)
+                                :headers {"origin" base-url "content-type" "application/json" "datastar-request" "true"}
+                                :body (ByteArrayInputStream. (.getBytes "{not json" "UTF-8"))})))
+            "glimmer-datastar parses Datastar bodies first; malformed JSON must still be a 400")))))

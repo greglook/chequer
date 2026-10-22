@@ -20,7 +20,8 @@ These conventions apply to every phase.
 - `chequer.auth` covers auth modes and middleware.
 - `chequer.router` is a hand-rolled router.
 - `chequer.web.layout`, `chequer.web.plans` and `chequer.web.lists` hold page and fragment rendering.
-- `chequer.broker` tracks SSE subscriptions.
+- `chequer.live` wires in glimmer-datastar (`jolt-lang/glimmer-datastar`): a revision ratom per topic, plus the
+  middleware that serves SSE re-renders.
 - `chequer.web.markdown` is a vendored, hardened renderer.
 - `chequer.data.plans`, `chequer.data.lists` and `chequer.data.add-plan` hold the domain logic.
 - `chequer.data.search` and `chequer.oidc` land in later phases.
@@ -29,8 +30,9 @@ These conventions apply to every phase.
 **Mutation model:**
 - Datastar `@post`/`@put`/`@delete` handlers validate the input against a malli schema, then run `with-tx`, then return `204`.
 - `with-tx` returns the set of topics the transaction touched, e.g. `#{[:plan 7] [:lists]}`.
-- After commit, the broker re-renders the affected fragments and pushes them to every subscribed SSE stream,
-  including the actor's own.
+- After commit, `live/wrap-touch` bumps each touched topic's revision ratom. glimmer-datastar re-renders every
+  open page whose SSE render dereffed one of them (the actor's own included) on its next tick, and pushes the
+  fragment when its HTML changed.
 - Fragments have stable ids: `plan-7`, `plan-group-3`, `plan-task-42`, `list-9`, `list-group-5`, `task-88`.
 - Validation errors come back directly as a `datastar-patch-elements` SSE response that targets the form's
   error element. The status is still 200, because Datastar applies SSE responses.
@@ -265,7 +267,7 @@ same-origin is allowed; no Origin and no Sec-Fetch-Site is blocked.
 Formatting in UTC and in `America/New_York`; an invalid cookie falls back to the config.
 
 
-## Phase 3: Plans, groups, plan tasks and a minimal live broker
+## Phase 3: Plans, groups, plan tasks and minimal live updates
 
 **Goal:** full CRUD for plans, groups and plan tasks, with markdown descriptions and up/down reordering. Every
 change is logged as an event and pushed live to other open plan pages.
@@ -353,23 +355,27 @@ first.
 **Tests:**
 `<script>` is escaped; a `javascript:` link is neutralized; emphasis, lists and code still render.
 
-### Task 3.6: Minimal broker and SSE endpoint
+### Task 3.6: Live updates with glimmer-datastar
 
-**Files:** create `src/chequer/broker.clj` and `test/chequer/broker_test.clj`.
-- `(subscribe! broker topic ch meta)` and `(unsubscribe! broker ch)` work over `broker = (atom {topic #{{:ch ch :meta m}}})`.
-- `(publish! broker topics render-fn)`: for each subscriber of each topic it
-  calls `(render-fn topic meta)`, which returns a sequence of SSE event
-  strings, and pushes them with `>!!`. If the push returns false, the
-  subscriber is unsubscribed.
-- `GET /plans/:id/stream` creates a channel, subscribes it to `[:plan id]` with
-  `{:user .. :tz ..}`, and returns `sse/event-response`.
-- In Phase 3 the render function re-renders the whole `#plan-7` body fragment.
-  Finer-grained patching waits until Phase 7, when it can be measured.
-- A `wrap-publish` helper runs after each mutating handler. It takes `:topics`
-  from the handler's response metadata and calls `publish!`.
+**Files:** create `src/chequer/live.clj` and `test/chequer/live_test.clj`.
+- `(live)` returns `{:cells (atom {topic ratom}) :scheduler (ds/scheduler)}`, kept in the system as `:live`.
+  `(cell l topic)` returns the topic's revision ratom, creating it on first use. `(touch! l topics)` bumps
+  the existing ones.
+- `wrap-touch` runs after each mutating handler. It takes `:topics` from the handler's response metadata and
+  calls `touch!`.
+- `wrap-live` is `ds/wrap-datastar` on the shared scheduler. It is the outermost middleware, so each SSE
+  re-render goes through auth again. It buffers the request body, because `wrap-datastar` reads Datastar
+  request bodies for signals.
+- There is no separate stream route. The page's root `div#live` carries `(ds/init-opts {:selector "#live"})`,
+  which opens an SSE request to the page's own URL with `datastar-sse=true`. The page handler derefs the
+  topic's cell and, for an SSE request (`:jolt.datastar/sse-request`), returns only the fragment.
+- In Phase 3 the whole `#plan-7` fragment is re-rendered. glimmer-datastar drops unchanged frames and keeps
+  only the newest frame for a slow client.
 
 **Tests:**
-A fake channel receives the fragment; a closed channel is removed; unrelated topics get nothing.
+- Touching a topic bumps only its own cell.
+- An SSE request gets a new frame after the cell it read is touched.
+- Action requests keep a readable body.
 
 ### Task 3.7: Plan pages and handlers
 
@@ -378,11 +384,12 @@ A fake channel receives the fragment; a closed channel is removed; unrelated top
 Pages:
 - `GET /plans` is the index page.
 - `GET /plans/new` shows the form, and `POST /plans` creates the plan and redirects with a 303 to `/plans/:id`.
-- `GET /plans/:id` shows the plan. Its body has `data-on-load="@get('/plans/7/stream')"`.
+- `GET /plans/:id` shows the plan inside `div#live` with `ds/init-opts`. The same URL, as an SSE request,
+  streams the re-rendered fragment.
 
 **Mutations:**
 These all read Datastar signals with `clojure.data.json` and return 204 plus the touched topics.
-- Plans: `PUT /plans/:id` and `DELETE /plans/:id`. Deleting a plan pushes `datastar-execute-script` to redirect to `/plans`.
+- Plans: `PUT /plans/:id` and `DELETE /plans/:id`. When a plan is deleted, its SSE render returns a self-removing `<script>` that redirects to `/plans`.
 - Groups: `POST /plans/:id/groups`, `PUT /plan-groups/:id`, `DELETE /plan-groups/:id` and `POST /plan-groups/:id/move?dir=up|down`.
 - Tasks: `POST /plans/:id/tasks`, `PUT /plan-tasks/:id`, `DELETE /plan-tasks/:id` and `POST /plan-tasks/:id/move?dir=up|down`.
 
@@ -468,15 +475,15 @@ Create `src/chequer/data/lists.clj` and `test/chequer/data/lists_test.clj`.
 ### Task 4.3: List pages
 
 **Files:**
-Create `src/chequer/web/lists.clj` and `test/chequer/web/lists_test.clj`; add a
-`[:list id]`/`[:lists]` renderer to the broker.
+Create `src/chequer/web/lists.clj` and `test/chequer/web/lists_test.clj`. List
+pages deref the `[:list id]` and `[:lists]` cells.
 
 **Pages:**
 - `GET /` shows the active lists, sorted with overdue lists first, then by due
   date, then by most recently updated. A "Show archived" link goes to `GET
   /lists?archived=1`.
 - `GET /lists/new` shows the form, and `POST /lists` creates the list and redirects with a 303.
-- `GET /lists/:id` shows the list, with `@get('/lists/9/stream')`.
+- `GET /lists/:id` shows the list inside `div#live` with `ds/init-opts`, as plans do.
 
 **Mutations:**
 - Lists: `PUT /lists/:id`, `DELETE /lists/:id`, `POST /lists/:id/archive` and `POST /lists/:id/unarchive`.
@@ -589,25 +596,27 @@ from other plans don't appear.
 ### Task 7.1: Server strategy and heartbeats
 
 **Files:**
-Modify `src/chequer/core.clj` and `src/chequer/broker.clj`.
+Modify `src/chequer/core.clj` and `src/chequer/live.clj`.
 - Start the server with `:strategy :fibers`.
-- A broker heartbeat loop sends an SSE comment (`: ping`) to every subscriber
-  every 25 seconds and drops any channel where the send fails.
-- `(broker/stats)` returns stream counts per topic and is shown on `/healthz` as `streams=N`.
+- A heartbeat keeps idle SSE streams open through proxies, every 25 seconds.
+  glimmer-datastar has no heartbeat, so this needs either a periodic touch
+  (a re-render that sends nothing when the HTML is unchanged does not reach the
+  wire, so it must not count on that) or an upstream feature.
+- Stream counts are shown on `/healthz` as `streams=N`, alongside `ds/cache-stats`.
 
 **Tests:**
-A heartbeat reaches the fake channel; a dead channel is removed.
+A heartbeat reaches an idle stream; a closed stream is released.
 
 ### Task 7.2: Finer-grained fragments
 
 **Files:**
-Modify `src/chequer/web/plans.clj`, `src/chequer/web/lists.clj` and `src/chequer/broker.clj`.
+Modify `src/chequer/web/plans.clj` and `src/chequer/web/lists.clj`.
 - Topics get more specific, e.g. `[:list 9 :task 88]` and `[:list 9
-  :structure]`. A change to a single task pushes only `#task-88` and the list
-  header. Pushing the whole page fragment is limited to structural changes:
-  adding, removing or moving rows, and group edits.
-- The render cache is keyed by `[topic viewer-tz mine?]`, so each distinct
-  render happens only once per publish.
+  :structure]`. Render through `jolt.datastar.html` with components (`[f args]`)
+  that deref these cells, so glimmer-datastar's component patches send only
+  `#task-88` and the list header when one task changes, and its component
+  cache renders each distinct `[f args]` (e.g. args including the viewer's tz)
+  once per change.
 
 **Tests:**
 A state change sends exactly two fragments.
@@ -718,9 +727,11 @@ Create `src/chequer/oidc.clj` and `test/chequer/oidc_test.clj`; add the `:oidc` 
   allowed as the original URL.
 
 `POST /auth/logout`:
-- deletes the session, clears the cookie and calls `(broker/close-session!
-  session-id)`, which closes that session's streams. Subscriptions store
-  `:session-id` in their metadata so this is possible.
+- deletes the session and clears the cookie. Its streams end on their next
+  render: auth answers the SSE re-render with a non-200 status, and
+  glimmer-datastar ends a stream whose render returns a redirect or error. The
+  logout touches a per-session cell that the session's renders deref, so that
+  render happens at once.
 
 Unauthenticated requests: in OIDC mode, a GET without a valid session redirects
 to login. Other methods and SSE requests get a 401.
@@ -792,7 +803,7 @@ Create `README.md` and `doc/operations.md`.
 
 ## Decisions
 
-- Mutations are broker-only: handlers return 204, and every viewer, including
+- Mutations are SSE-only: handlers return 204, and every viewer, including
   the actor, gets updates over SSE.
 - There's a single writer connection behind a lock, plus a read pool. `with-tx`
   returns the touched topics.
