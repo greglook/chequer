@@ -29,7 +29,9 @@ jobs:
       - name: Cache git deps
         uses: actions/cache@v6
         with:
-          path: ~/.jolt/gitlibs
+          path: |
+            ~/.jolt/gitlibs
+            ~/.m2
           key: gitlibs-${{ hashFiles('deps.edn') }}
           restore-keys: gitlibs-
 
