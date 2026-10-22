@@ -5,7 +5,7 @@
     [chequer.db :as db]
     [chequer.live :as live]
     [chequer.router :as router]
-    [chequer.web.layout :as layout]
+    [chequer.web.lists :as lists]
     [chequer.web.plans :as plans]
     [clojure.java.io :as io]
     [clojure.string :as str]
@@ -14,16 +14,6 @@
     [ring.middleware.cookies :refer [wrap-cookies]]
     [ring.middleware.not-modified :refer [wrap-not-modified]]
     [ring.middleware.params :refer [wrap-params]]))
-
-
-(defn- index
-  "GET / handler: the lists page."
-  [req]
-  {:status 200
-   :headers {"Content-Type" "text/html; charset=utf-8"}
-   :body (layout/page req "Lists"
-                      [:h1 "Lists"]
-                      [:p.empty "No lists yet."])})
 
 
 (defn- healthz
@@ -37,9 +27,9 @@
 
 (def ^:private routes
   "Application routes as [method path-pattern handler]."
-  (into [[:get [] index]
-         [:get ["healthz"] healthz]]
-        plans/routes))
+  (vec (concat [[:get ["healthz"] healthz]]
+               lists/routes
+               plans/routes)))
 
 
 (def ^:private static-content-types

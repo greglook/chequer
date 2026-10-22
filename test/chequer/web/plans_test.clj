@@ -100,7 +100,7 @@
         (is (= "text/event-stream" (get-in r [:headers "Content-Type"])))
         (is (str/includes? (:body r) "event: datastar-patch-elements"))
         (is (str/includes? (:body r) "id=\"new-plan-errors\""))
-        (is (str/includes? (:body r) "can&apos;t be blank")))
+        (is (str/includes? (:body r) "can&#39;t be blank")))
       (is (nil? (db/q1 (:db sys) ["SELECT * FROM plan"])))
       (let [pid (create-plan! h "P")
             r (request h :post (str "/plans/" pid "/tasks") {:title "x" :estimate "soon"})]

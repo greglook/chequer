@@ -54,3 +54,22 @@
       (nil? n) "just now"
       (neg? diff) (str n " " unit (when (> n 1) "s") " ago")
       :else (str "in " n " " unit (when (> n 1) "s")))))
+
+
+(def ^:private input-formatter
+  (t/formatter "yyyy-MM-dd'T'HH:mm"))
+
+
+(defn parse-local-input
+  "Epoch milliseconds for the value s of a datetime-local input (\"2026-03-01T09:30\", seconds
+  optional) read in time zone tz, or nil if s isn't one."
+  [s tz]
+  (try
+    (inst-ms (t/instant (t/in (t/date-time s) tz)))
+    (catch Exception _ nil)))
+
+
+(defn format-local-input
+  "The datetime-local input value for epoch milliseconds ms in time zone tz."
+  [ms tz]
+  (t/format input-formatter (t/in (t/instant ms) tz)))

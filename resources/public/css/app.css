@@ -22,3 +22,60 @@ nav .user {
 .empty {
   color: #666;
 }
+
+.badge {
+  font-size: 0.75rem;
+  border-radius: 0.25rem;
+  padding: 0 0.3rem;
+  margin-left: 0.4rem;
+  background: #eee;
+  color: #333;
+}
+
+.badge.overdue {
+  background: #fdd;
+  color: #900;
+}
+
+.badge.done {
+  background: #dfd;
+  color: #060;
+}
+
+.badge.working {
+  background: #def;
+  color: #036;
+}
+
+.task .row,
+.lists li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.task .controls {
+  margin-left: auto;
+}
+
+.task.completed .title,
+.task.abandoned .title {
+  text-decoration: line-through;
+  color: #777;
+}
+
+.task .assignee,
+.task .estimate,
+.due {
+  color: #555;
+  font-size: 0.875rem;
+}
+
+details.menu {
+  display: inline-block;
+}
+
+.toggle.on {
+  font-weight: bold;
+}

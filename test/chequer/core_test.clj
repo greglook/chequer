@@ -3,6 +3,7 @@
     [chequer.config :as config]
     [chequer.core :as core]
     [chequer.db :as db]
+    [chequer.live :as live]
     [chequer.test-helpers :as helpers]
     [clojure.string :as str]
     [clojure.test :refer [deftest is]]
@@ -15,11 +16,13 @@
   [f]
   (let [path (helpers/temp-db-path)
         d (db/open path)
-        cfg (config/normalize {"database" {"path" path}})]
+        cfg (config/normalize {"database" {"path" path}})
+        l (live/live)]
     (try
       (db/migrate! d)
-      (f (core/handler {:db d :cfg cfg}))
+      (f (core/handler {:db d :cfg cfg :live l}))
       (finally
+        (live/stop! l)
         (db/close! d)
         (helpers/delete-db-files path)))))
 

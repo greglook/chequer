@@ -2,7 +2,7 @@
   "The page shell shared by every full-page response, and the viewer's time zone."
   (:require
     [chequer.time :as time]
-    [hiccup2.core :as h]))
+    [jolt.datastar.html :as h]))
 
 
 (defn viewer-tz
@@ -43,4 +43,4 @@ if (tz && document.cookie.indexOf('tz=' + encodeURIComponent(tz)) === -1) {
             [:a {:href "/plans"} "Plans"]
             [:a {:href "/search"} "Search"]
             [:span.user (get-in req [:chequer/user :title])]]
-           (into [:main] body)]])))
+           [:main body]]])))

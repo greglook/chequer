@@ -59,3 +59,12 @@
   (is (= "in 1 hour" (time/relative (+ 1000 hour) 1000)) "exactly an hour")
   (is (= "in 23 hours" (time/relative (+ 1000 (dec day)) 1000)) "just under a day")
   (is (= "in 1 day" (time/relative (+ 1000 day) 1000)) "exactly a day"))
+
+
+(deftest local-inputs-round-trip-in-the-zone
+  ;; 2026-03-01 is before the US switch to daylight time, so New York is UTC-5.
+  (is (= 1772375400000 (time/parse-local-input "2026-03-01T09:30" "America/New_York")))
+  (is (= 1772375400000 (time/parse-local-input "2026-03-01T14:30:00" "UTC")))
+  (is (= "2026-03-01T09:30" (time/format-local-input 1772375400000 "America/New_York")))
+  (is (nil? (time/parse-local-input "tomorrow" "UTC")))
+  (is (nil? (time/parse-local-input "" "UTC"))))

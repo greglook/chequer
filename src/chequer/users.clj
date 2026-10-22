@@ -48,6 +48,12 @@
           (by-id tx id))))))
 
 
+(defn list-users
+  "Every user as {:id :name :title}, ordered by title."
+  [db]
+  (db/q db ["SELECT id, name, title FROM user ORDER BY title, id"]))
+
+
 (defn touch-last-seen!
   "Record that user (a user row) was just seen, writing only if their last_seen is more than
   five minutes old. Returns the user row, updated when it was written."
