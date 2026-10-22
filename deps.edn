@@ -73,7 +73,13 @@
  {:embed ["resources"]}
 
  :aliases
- {:test
+ {:carve
+  {:extra-deps {io.github.borkdude/carve
+                {:git/url "https://github.com/borkdude/carve"
+                 :git/sha "fdd1d0bc432f63db69e3a72167ef5e46f10dfba7"}}
+   :main-opts  ["-m" "carve.main"]}
+
+  :test
   {:extra-paths ["test"]
    :extra-deps
    {io.github.cognitect-labs/test-runner

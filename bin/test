@@ -5,12 +5,21 @@ set -e
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-# Slow tests tagged ^:load are skipped unless the arguments choose what to include.
-exclude=(-e :load)
-for arg in "$@"; do
-  case "$arg" in
-    -i|--include|-i*|--include=*) exclude=() ;;
-  esac
-done
+if [[ $1 = lint ]]; then
+    clj-kondo --lint src:test
 
-exec jolt -M:test -m cognitect.test-runner "${exclude[@]}" "$@"
+elif [[ $1 = carve ]]; then
+    # NOTE: doesn't run on jolt yet
+    exec clj -M:carve --paths src --dry-run
+
+else
+    # Slow tests tagged ^:load are skipped unless the arguments choose what to include.
+    exclude=(-e :load)
+    for arg in "$@"; do
+      case "$arg" in
+        -i|--include|-i*|--include=*) exclude=() ;;
+      esac
+    done
+
+    exec jolt -M:test -m cognitect.test-runner "${exclude[@]}" "$@"
+fi
