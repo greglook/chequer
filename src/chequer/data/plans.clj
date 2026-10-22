@@ -74,7 +74,7 @@
   (validate Estimate s))
 
 
-(defn- clean
+(defn clean
   "Validate the keys of attrs that have a schema in schemas. Returns the cleaned map of those
   keys, or throws ex-info {:type :chequer/invalid :errors {k message}}."
   [schemas attrs]
@@ -140,19 +140,19 @@
    :plan.task/updated-by (:updated_by r)})
 
 
-(defn- fetch-row
+(defn fetch-row
   [tx table id]
   (jdbc/fetch-one tx [(str "SELECT * FROM " table " WHERE id = ?") id]))
 
 
-(defn- fetch-existing
+(defn fetch-existing
   "The row of table with id, or throws ex-info {:type :chequer/not-found}."
   [tx table id]
   (or (fetch-row tx table id)
       (throw (ex-info (str "No " table " " id) {:type :chequer/not-found :table table :id id}))))
 
 
-(defn- update-row!
+(defn update-row!
   "Set the columns in changes (keys from a fixed schema map) on row id of table."
   [tx table id changes]
   (let [cols (keys changes)]
@@ -162,7 +162,7 @@
                             (concat (map changes cols) [id])))))
 
 
-(defn- next-order
+(defn next-order
   [tx table [where & params]]
   (order/append-order
     (map :order (jdbc/fetch tx (into [(str "SELECT \"order\" FROM " table " WHERE " where)] params)))))
