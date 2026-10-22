@@ -1,7 +1,15 @@
 {:paths ["src" "resources"]
 
  :deps
- {jolt-lang/ring-chez-adapter
+ {jolt-lang/time
+  {:git/url "https://github.com/jolt-lang/time.git"
+   :git/sha "2c58d9c709a25d80608757c3026f4c656a994ef1"}
+
+  jolt-lang/db
+  {:git/url "https://github.com/jolt-lang/db"
+   :git/sha "1a25bcbc1489a39223b98949b175dceab18b2638"}
+
+  jolt-lang/ring-chez-adapter
   {:git/url "https://github.com/jolt-lang/ring-chez-adapter"
    :git/tag "v0.8.0"
    :git/sha "87e637e2ce3b6d25fee67b8bf86cd7595eea30a4"}
@@ -11,30 +19,22 @@
    :git/tag "v0.1.7"
    :git/sha "2c8024eb6c05282ea9a062942b28af1cd3c9bd09"}
 
-  weavejester/hiccup
-  {:git/url "https://github.com/weavejester/hiccup"
-   :git/sha "b6b12097ba973141fe87c1b4d6a27ddcce5d5929"}
-
-  jolt-lang/db
-  {:git/url "https://github.com/jolt-lang/db"
-   :git/sha "1a25bcbc1489a39223b98949b175dceab18b2638"}
-
-  io.github.jolt-lang/time
-  {:git/url "https://github.com/jolt-lang/time.git"
-   :git/sha "2c58d9c709a25d80608757c3026f4c656a994ef1"}
-
-  metosin/malli
-  {:git/url "https://github.com/metosin/malli"
-   :git/sha "a74e3b45efa30b3bcdb2e997f337c71614eba3c5"}
+  org.clojure/tools.cli
+  {:git/url "https://github.com/clojure/tools.cli"
+   :git/tag "v1.1.230"
+   :git/sha "717e187ec98e6a75c7f26a3120fbe9eecc434f05"}
 
   org.clojure/data.json
   {:git/url "https://github.com/clojure/data.json.git"
    :git/sha "1fce9070ee851f49a6c4ce6e1c0bb0db4d7594a0"}
 
-  org.clojure/tools.cli
-  {:git/url "https://github.com/clojure/tools.cli"
-   :git/tag "v1.1.230"
-   :git/sha "717e187ec98e6a75c7f26a3120fbe9eecc434f05"}}
+  metosin/malli
+  {:git/url "https://github.com/metosin/malli"
+   :git/sha "a74e3b45efa30b3bcdb2e997f337c71614eba3c5"}
+
+  weavejester/hiccup
+  {:git/url "https://github.com/weavejester/hiccup"
+   :git/sha "b6b12097ba973141fe87c1b4d6a27ddcce5d5929"}}
 
  :jolt/build
  {:embed ["resources"]}

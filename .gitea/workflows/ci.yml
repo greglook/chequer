@@ -14,7 +14,7 @@ jobs:
   test:
     runs-on: node-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install jolt
         run: |
@@ -27,10 +27,11 @@ jobs:
           echo "$HOME/.jolt" >> "$GITHUB_PATH"
 
       - name: Cache git deps
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
-          path: ~/.local/state/clojure/gitlibs
+          path: ~/.jolt/gitlibs
           key: gitlibs-${{ hashFiles('deps.edn') }}
+          restore-keys: gitlibs-
 
       - name: Run tests
         run: bin/test
@@ -38,7 +39,7 @@ jobs:
   style:
     runs-on: node-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install cljstyle
         run: |
@@ -55,7 +56,7 @@ jobs:
   lint:
     runs-on: node-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install clj-kondo
         run: |
