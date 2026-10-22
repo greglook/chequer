@@ -166,7 +166,7 @@
     (fn [d path]
       (db/migrate! d)
       (is (= latest (user-version d)))
-      (is (= #{"user" "event" "plan" "plan_group" "plan_task"} (table-names d)))
+      (is (= #{"user" "event" "plan" "plan_group" "plan_task" "list" "list_group" "task"} (table-names d)))
       (is (not (.exists (io/file (str path ".pre-v" latest ".bak"))))
           "an empty database needs no backup"))))
 
@@ -295,3 +295,33 @@
         (db/with-tx [tx d] (jdbc/execute! tx ["DELETE FROM plan WHERE id = ?" p1]))
         (is (nil? (db/q1 d ["SELECT 1 FROM plan_task WHERE id = ?" t1])))
         (is (nil? (db/q1 d ["SELECT 1 FROM plan_group WHERE plan_id = ?" p1])))))))
+
+
+(deftest list-schema-enforces-same-list-groups-state-check-and-cascades
+  (helpers/with-test-db
+    (fn [d]
+      (let [uid (:id (helpers/create-user! d "u"))
+            lst #(db/insert! %1 :list {:title %2 :created_at 1 :created_by uid :updated_at 1 :updated_by uid})
+            task (fn [tx lid gid & [state]]
+                   (db/insert! tx :task (cond-> {:list_id lid :group_id gid :order 1.0 :title "t"
+                                                 :created_at 1 :created_by uid :updated_at 1 :updated_by uid}
+                                          state (assoc :state state))))
+            {[l1 l2 g1 t1] :result} (db/with-tx [tx d]
+                                      (let [l1 (lst tx "a")
+                                            l2 (lst tx "b")
+                                            g1 (db/insert! tx :list_group {:list_id l1 :order 1.0 :title "g"})]
+                                        [l1 l2 g1 (task tx l1 g1)]))]
+        (is (= "pending" (:state (db/q1 d ["SELECT state FROM task WHERE id = ?" t1]))) "state defaults to pending")
+        (is (thrown-with-msg? Exception #"group belongs to another list"
+              (db/with-tx [tx d] (task tx l2 g1))))
+        (is (thrown-with-msg? Exception #"group belongs to another list"
+              (db/with-tx [tx d]
+                (jdbc/execute! tx ["UPDATE task SET list_id = ? WHERE id = ?" l2 t1]))))
+        (is (thrown-with-msg? Exception #"group belongs to another list"
+              (db/with-tx [tx d]
+                (let [g2 (db/insert! tx :list_group {:list_id l2 :order 1.0 :title "g"})]
+                  (jdbc/execute! tx ["UPDATE task SET group_id = ? WHERE id = ?" g2 t1])))))
+        (is (thrown? Exception (db/with-tx [tx d] (task tx l1 nil "bogus"))))
+        (db/with-tx [tx d] (jdbc/execute! tx ["DELETE FROM list WHERE id = ?" l1]))
+        (is (nil? (db/q1 d ["SELECT 1 FROM task WHERE id = ?" t1])))
+        (is (nil? (db/q1 d ["SELECT 1 FROM list_group WHERE list_id = ?" l1])))))))
