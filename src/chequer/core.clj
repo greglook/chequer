@@ -2,9 +2,11 @@
   "System wiring: the ring handler, middleware, and server start and stop."
   (:require
     [chequer.auth :as auth]
+    [chequer.broker :as broker]
     [chequer.db :as db]
     [chequer.router :as router]
     [chequer.web.layout :as layout]
+    [chequer.web.plans :as plans]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [ring-chez.adapter :as adapter]))
@@ -31,8 +33,9 @@
 
 (def ^:private routes
   "Application routes as [method path-pattern handler]."
-  [[:get [] index]
-   [:get ["healthz"] healthz]])
+  (into [[:get [] index]
+         [:get ["healthz"] healthz]]
+        plans/routes))
 
 
 (def ^:private static-content-types
@@ -57,17 +60,19 @@
 
 
 (defn wrap-system
-  "Put the database and config on each request as :chequer/db and :chequer/cfg."
-  [handler {:keys [db cfg]}]
+  "Put the database, config and broker on each request as :chequer/db, :chequer/cfg and
+  :chequer/broker."
+  [handler {:keys [db cfg broker]}]
   (fn [req]
-    (handler (assoc req :chequer/db db :chequer/cfg cfg))))
+    (handler (assoc req :chequer/db db :chequer/cfg cfg :chequer/broker broker))))
 
 
 (defn handler
-  "The application's ring handler for the running system sys ({:db .. :cfg ..})."
-  [sys]
-  (let [cfg (:cfg sys)]
+  "The application's ring handler for the running system sys ({:db .. :cfg .. :broker ..})."
+  [{:keys [cfg db] :as sys}]
+  (let [publish #(broker/publish! (:broker sys) % (partial plans/plan-events db))]
     (-> (router/handler routes)
+        (broker/wrap-publish publish)
         (auth/wrap-auth (:auth cfg))
         (auth/wrap-origin-check)
         (wrap-static)
@@ -95,13 +100,14 @@
 
 
 (defn start!
-  "Open and migrate the database, then start the HTTP server. Returns {:server .. :db .. :cfg ..}."
+  "Open and migrate the database, then start the HTTP server. Returns
+  {:server .. :db .. :cfg .. :broker ..}."
   [cfg]
   (let [db (db/open (get-in cfg [:database :path]))]
     (try
       (db/migrate! db)
       (let [{:keys [host port]} (get-in cfg [:server :listen])
-            sys {:db db :cfg cfg}
+            sys {:db db :cfg cfg :broker (broker/broker)}
             server (adapter/run-server (wrap-request-log (handler sys))
                                        {:host host :port port})]
         (assoc sys :server server))

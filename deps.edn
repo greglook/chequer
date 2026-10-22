@@ -22,6 +22,10 @@
   {:git/url "https://github.com/metosin/malli"
    :git/sha "a74e3b45efa30b3bcdb2e997f337c71614eba3c5"}
 
+  org.clojure/data.json
+  {:git/url "https://github.com/clojure/data.json.git"
+   :git/sha "1fce9070ee851f49a6c4ce6e1c0bb0db4d7594a0"}
+
   org.clojure/tools.cli
   {:git/url "https://github.com/clojure/tools.cli"
    :git/tag "v1.1.230"

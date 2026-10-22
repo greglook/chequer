@@ -27,6 +27,21 @@ description: Build/extend a Jolt (Clojure on Chez Scheme) ring web app with ring
 - Git deps need full SHAs. First run fetches deps into ~/.jolt/gitlibs and is slow — use long timeouts (≥900s).
 - `jolt run` is a builtin command, so name the server task `serve`.
 
+## Library quirks (verified under jolt 0.8.23)
+- JSON: add `org.clojure/data.json` (git sha 1fce9070ee851f49a6c4ce6e1c0bb0db4d7594a0). It needs jolt-lang/time loaded first (require tick.core / jolt.time before it).
+- clojure.jdbc `insert!` doesn't quote column names, so pass `{:entities #(str \" % \")}` when a column is a reserved word (e.g. "order").
+- Malli: put `:error/message` on each `[:fn]` child. On an `[:and]` wrapper it humanizes to "unknown error". `:decode/string` fns also get nil.
+- core.async: `offer!` is non-blocking (useful for a broker fan-out to SSE chans). `>!!` on a closed chan returns false.
+- Ring request :body from ring-chez is a ByteArrayInputStream (or nil); slurp it. Tests can pass `(ByteArrayInputStream. (.getBytes s "UTF-8"))`.
+- AOT cache (~/.jolt/aot-cache/<ver>/v1/) does NOT invalidate a ns whose macro lists resource files at compile time. After adding such a file, delete that ns's cached entries (`find ... -name '<ns>-*' -not -name '<ns>-test*' -delete`), with user approval.
+
+## Datastar v1 details (check against the source in starfederation/datastar library/src)
+- Use `data-init="@get('/x/stream')"` (not data-on-load) and `data-on:click`/`data-bind:name`.
+- @post/@put send signals as a JSON body by default. `{contentType: 'form'}` sends the closest form urlencoded.
+- Responses: 204 = no-op; text/html patches elements; text/event-stream handles SSE events.
+- No execute-script event: send `datastar-patch-elements` with `mode append`, `selector body`, `elements <script data-effect="el.remove()">...</script>`.
+- Datastar bundle source of truth: `sdk/ADR.md` for the wire format, `library/src/plugins/actions/fetch.ts` for request behavior.
+
 ## Testing with cognitect test-runner
 - Add `io.github.cognitect-labs/test-runner` (git tag v0.5.1, full sha) under the :test alias :extra-deps and make bin/test `exec jolt -M:test -m cognitect.test-runner "$@"`; then `bin/test -n my.ns-test` runs one namespace. Missing src ns shows as FileNotFoundException "Could not locate x.jolt (or .clj/.cljc)" — that is the red step in TDD.
 - Check the real exit status: `bin/test > log 2>&1; echo exit=$?` (not through `| tail`).

@@ -131,7 +131,8 @@
         sys (core/start! cfg)]
     (try
       (is (= cfg (:cfg sys)))
-      (is (= 1 (:user_version (db/q1 (:db sys) ["PRAGMA user_version"]))) "migrated on start")
+      (is (= (count db/migration-files) (:user_version (db/q1 (:db sys) ["PRAGMA user_version"])))
+          "migrated on start")
       (finally
         (core/stop! sys)
         (helpers/delete-db-files path)))))

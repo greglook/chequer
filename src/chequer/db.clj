@@ -178,7 +178,8 @@
 (defn insert!
   "Insert row (a map) into table (a keyword) and return the new id."
   [tx table row]
-  (:id (first (jdbc/insert! tx table row {:returning true}))))
+  ;; Quoted, because "order" is a column name.
+  (:id (first (jdbc/insert! tx table row {:returning true :entities #(str \" % \")}))))
 
 
 ;; ## Read Operations

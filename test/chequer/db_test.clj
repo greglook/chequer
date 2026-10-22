@@ -166,7 +166,7 @@
     (fn [d path]
       (db/migrate! d)
       (is (= latest (user-version d)))
-      (is (= #{"user" "event"} (table-names d)))
+      (is (= #{"user" "event" "plan" "plan_group" "plan_task"} (table-names d)))
       (is (not (.exists (io/file (str path ".pre-v" latest ".bak"))))
           "an empty database needs no backup"))))
 
@@ -229,3 +229,30 @@
                            (db/insert! tx :user {:subject "owner" :name "owner" :title "Owner" :created_at 1 :last_seen 1})))]
         (is (pos? (:result (db/with-tx [tx d]
                              (db/insert! tx :event {:instant 1 :user_id uid :entity_type "plan" :entity_id 1 :action "created"})))))))))
+
+
+(deftest plan-schema-enforces-same-plan-groups-and-cascades
+  (helpers/with-test-db
+    (fn [d]
+      (let [uid (:id (helpers/create-user! d "u"))
+            plan #(db/insert! %1 :plan {:title %2 :created_at 1 :created_by uid :updated_at 1 :updated_by uid})
+            task (fn [tx pid gid]
+                   (db/insert! tx :plan_task {:plan_id pid :group_id gid :order 1.0 :title "t"
+                                              :created_at 1 :created_by uid :updated_at 1 :updated_by uid}))
+            {[p1 p2 g1 t1] :result} (db/with-tx [tx d]
+                                      (let [p1 (plan tx "a")
+                                            p2 (plan tx "b")
+                                            g1 (db/insert! tx :plan_group {:plan_id p1 :order 1.0 :title "g"})]
+                                        [p1 p2 g1 (task tx p1 g1)]))]
+        (is (thrown-with-msg? Exception #"group belongs to another plan"
+              (db/with-tx [tx d] (task tx p2 g1))))
+        (is (thrown-with-msg? Exception #"group belongs to another plan"
+              (db/with-tx [tx d]
+                (jdbc/execute! tx ["UPDATE plan_task SET plan_id = ? WHERE id = ?" p2 t1]))))
+        (is (thrown-with-msg? Exception #"group belongs to another plan"
+              (db/with-tx [tx d]
+                (let [g2 (db/insert! tx :plan_group {:plan_id p2 :order 1.0 :title "g"})]
+                  (jdbc/execute! tx ["UPDATE plan_task SET group_id = ? WHERE id = ?" g2 t1])))))
+        (db/with-tx [tx d] (jdbc/execute! tx ["DELETE FROM plan WHERE id = ?" p1]))
+        (is (nil? (db/q1 d ["SELECT 1 FROM plan_task WHERE id = ?" t1])))
+        (is (nil? (db/q1 d ["SELECT 1 FROM plan_group WHERE plan_id = ?" p1])))))))
