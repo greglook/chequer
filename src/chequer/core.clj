@@ -121,7 +121,7 @@
                      (str (str/upper-case (name request-method)) " "
                           (cond-> uri query-string (str "?" query-string)) " "
                           outcome))
-          elapsed #(str (quot (- (System/nanoTime) start) 1000000) "ms")]
+          elapsed #(format "%.1f ms" (/ (- (System/nanoTime) start) 1e6))]
       (try
         (let [resp (next-handler req)]
           (log/info (describe (str (:status resp) " " (elapsed))))
