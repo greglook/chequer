@@ -180,6 +180,45 @@
       (is (not (.exists (io/file (str path ".pre-v" latest ".bak"))))))))
 
 
+(deftest migrate-returns-the-applied-migrations
+  (with-empty-db
+    (fn [d _]
+      (is (= (vec db/migration-files) (mapv :file (db/migrate! d))))
+      (is (= [] (db/migrate! d)) "nothing is applied the second time"))))
+
+
+(deftest migrate-returns-only-the-pending-migrations
+  (with-empty-db
+    (fn [d _]
+      (let [ms [{:file "a" :version 1 :statements (delay ["CREATE TABLE a (id INTEGER PRIMARY KEY)"])}
+                {:file "b" :version 2 :statements (delay ["CREATE TABLE b (id INTEGER PRIMARY KEY)"])}]]
+        (db/migrate! d (subvec ms 0 1))
+        (is (= ["b"] (mapv :file (db/migrate! d ms))))))))
+
+
+(deftest backup-copies-the-database-to-the-destination
+  (with-empty-db
+    (fn [d path]
+      (db/migrate! d)
+      (jdbc/execute! (:writer d) "INSERT INTO user (subject, name, title, created_at, last_seen) VALUES ('s', 'n', 't', 0, 0)")
+      (let [dest (str path ".copy")]
+        (db/backup! d dest)
+        (let [b (db/open dest)]
+          (try
+            (is (= latest (user-version b)))
+            (is (= {:n 1} (db/q1 b ["SELECT count(*) AS n FROM user"])))
+            (finally (db/close! b))))))))
+
+
+(deftest backup-never-overwrites-an-existing-file
+  (with-empty-db
+    (fn [d path]
+      (let [dest (str path ".copy")]
+        (spit dest "precious")
+        (is (thrown-with-msg? Exception #"already exists" (db/backup! d dest)))
+        (is (= "precious" (slurp dest)))))))
+
+
 (deftest upgrading-a-non-empty-database-writes-a-backup
   (with-empty-db
     (fn [d path]

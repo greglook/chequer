@@ -132,9 +132,11 @@ serves `/` (placeholder shell) and `/healthz`.
   throws `ex-info` carrying the humanized errors. A `:multi` schema dispatching on `:auth :mode` checks for an
   unknown mode, a missing proxy header in proxy mode, and missing OIDC keys in oidc mode.
 - Command line parsing uses tools.cli in `chequer.main`: `(parse-args args)` wraps
-  `clojure.tools.cli/parse-opts` with `-c/--config PATH` and `-h/--help`. It returns `{:config path}`,
-  `{:help usage}` or `{:errors [...]}`; unknown options and stray arguments are errors. The config path is
-  resolved as `--config`, then `CHEQUER_CONFIG`, then `chequer.ini`. The `PORT` env variable is removed.
+  `clojure.tools.cli/parse-opts` with `-c/--config PATH` and `-h/--help`, plus a required subcommand:
+  `server`, `migrate` or `backup DEST`. It returns `{:command :server|:migrate|:backup :config path :dest path}`,
+  `{:help usage}` or `{:errors [...]}`; a missing or unknown command, unknown options and stray arguments are
+  errors. The config path is resolved as `--config`, then `CHEQUER_CONFIG`, then `chequer.ini`. The `PORT` env
+  variable is removed.
 
 **Tests:**
 Comments and sections parse; `listen` handles `:3000` and `0.0.0.0:8080`;

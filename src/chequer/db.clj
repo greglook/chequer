@@ -118,11 +118,27 @@
   (nil? (jdbc/fetch-one conn "SELECT 1 FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' LIMIT 1")))
 
 
+(defn- vacuum-into!
+  "Copy the database on conn to the file dest with VACUUM INTO; an existing file is never overwritten."
+  [conn dest]
+  (when (.exists (io/file dest))
+    (throw (ex-info (str "Backup already exists, refusing to overwrite: " dest)
+                    {:backup dest})))
+  (jdbc/execute! conn ["VACUUM INTO ?" dest]))
+
+
+(defn backup!
+  "Write a consistent copy of the database to the file dest. Throws if dest already exists."
+  [{:keys [writer lock]} dest]
+  (locking lock
+    (vacuum-into! writer dest)))
+
+
 (defn migrate!
-  "Apply pending migrations (default: all migrations) in one transaction. A
-  non-empty database is first copied to <path>.pre-v<N>.bak with VACUUM INTO,
-  where N is the version being migrated to; an existing backup is never
-  overwritten."
+  "Apply pending migrations (default: all migrations) in one transaction and
+  return the vector of migrations applied. A non-empty database is first
+  copied to <path>.pre-v<N>.bak with VACUUM INTO, where N is the version being
+  migrated to; an existing backup is never overwritten."
   ([db]
    (let [migrations (mapv load-migration migration-files)]
      (migrate! db migrations)))
@@ -133,16 +149,13 @@
        (when (seq pending)
          (let [target (:version (last pending))]
            (when-not (empty-database? writer)
-             (let [backup (str path ".pre-v" target ".bak")]
-               (when (.exists (io/file backup))
-                 (throw (ex-info (str "Backup already exists, refusing to overwrite: " backup)
-                                 {:backup backup})))
-               (jdbc/execute! writer ["VACUUM INTO ?" backup])))
+             (vacuum-into! writer (str path ".pre-v" target ".bak")))
            (jdbc/atomic writer
                         (doseq [{:keys [statements]} pending
                                 statement @statements]
                           (jdbc/execute! writer statement))
-                        (jdbc/execute! writer (str "PRAGMA user_version = " target)))))))))
+                        (jdbc/execute! writer (str "PRAGMA user_version = " target)))))
+       pending))))
 
 
 ;; ## Write Operations

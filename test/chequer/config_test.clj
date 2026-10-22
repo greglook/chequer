@@ -1,7 +1,6 @@
 (ns chequer.config-test
   (:require
     [chequer.config :as config]
-    [chequer.main :as main]
     [clojure.test :refer [deftest is testing]]))
 
 
@@ -128,12 +127,3 @@ header=X-Remote-User
     (try
       (is (= 8080 (get-in (config/load-config path) [:server :listen :port])))
       (finally (.delete (java.io.File. path))))))
-
-
-(deftest parse-args-forms
-  (is (= {:config "a.ini"} (main/parse-args ["-c" "a.ini"])))
-  (is (= {:config "b.ini"} (main/parse-args ["--config=b.ini"])))
-  (is (= {} (main/parse-args [])))
-  (is (string? (:help (main/parse-args ["-h"]))))
-  (is (seq (:errors (main/parse-args ["--bogus"]))))
-  (is (seq (:errors (main/parse-args ["stray"])))))

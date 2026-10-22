@@ -103,6 +103,11 @@ description: Build/extend a Jolt (Clojure on Chez Scheme) ring web app with ring
 - jolt-lang/db sqlite `execute!` runs only the FIRST statement of a multi-statement string and silently ignores the rest. Split SQL files yourself, e.g. on `;[ \t]*(?:\n|$)` after dropping whole-line `--` comments. Trigger bodies must keep their inner `;` mid-line.
 - Private fns are testable via var: `(#'db/parse-migration-name "...")`.
 
+## CLI subcommands (tools.cli)
+- `cli/parse-opts` puts the subcommand and its positional args in `:arguments`, and options may appear before or after them. Destructure `[command & more]`, validate the count of `more` per command, and keep `parse-args` pure, returning `{:command .. :config .. :dest ..}`, `{:help ..}` or `{:errors [..]}`, so it can be unit-tested. `-main` does the dispatch and calls `System/exit 1` through a `fail` helper.
+- Manually smoke-test every subcommand with `jolt -m app.main -c /tmp/x.ini CMD`. Check the exit codes (`echo $?`), the already-exists and missing-DB errors, and `server` (start it in the background, request it, send SIGINT, expect exit 130).
+- `VACUUM INTO` fails if the target exists. Check `.exists` first and throw a clear error, so a backup never overwrites a file.
+
 ## Quirks
 - `re-matches` returns `[whole g1 g2 ...]`; destructure with a leading `_`. An off-by-one here showed up as a tick parse error ("could not parse LocalDate").
 - A threaded `->>` step that needs the value somewhere other than last: `(#(str/split % re))`.

@@ -17,10 +17,20 @@ bin/repl
 Run the app on `localhost:3000` using the dev config in `dev/chequer.ini`:
 
 ```sh
-bin/run
+bin/run server
 ```
 
-State is kept (the SQLite database) under `dev/state/`. Extra arguments are passed through to `chequer.main`.
+State is kept (the SQLite database) under `dev/state/`. Arguments are passed through to `chequer.main`, which
+takes a subcommand:
+
+- `server` runs the server.
+- `migrate` applies pending migrations to the configured database and lists the ones applied.
+- `backup DEST` writes a copy of the configured database to the file `DEST`, refusing to overwrite it.
+
+```sh
+bin/run migrate
+bin/run backup dev/state/backup.db
+```
 
 ## Unit tests
 
