@@ -9,9 +9,7 @@
     [clojure.data.json :as json]
     [clojure.string :as str]
     [hiccup2.core :as h]
-    [jolt.datastar.core :as ds])
-  (:import
-    java.net.URLDecoder))
+    [jolt.datastar.core :as ds]))
 
 
 ;; ## SSE events
@@ -55,38 +53,22 @@
 
 ;; ## Request bodies
 
-(defn- parse-form
-  [s]
-  (into {}
-        (keep (fn [pair]
-                (let [[k v] (str/split pair #"=" 2)]
-                  (when-not (str/blank? k)
-                    [(keyword (URLDecoder/decode ^String k "UTF-8"))
-                     (URLDecoder/decode ^String (or v "") "UTF-8")]))))
-        (str/split s #"&")))
-
-
 (defn- read-params
-  "The request's Datastar signals (JSON) or form fields as a map of keyword to string,
-  or nil when the body is malformed or holds non-string values."
-  [{:keys [body headers]}]
+  "The request's Datastar signals (JSON) or form fields (parsed by ring's wrap-params) as a
+  map of keyword to string, or nil when the body is malformed or holds non-string values."
+  [{:keys [body headers form-params]}]
   (try
-    (let [ct (get headers "content-type" "")
-          s (if body (slurp body) "")
+    (let [content-type (get headers "content-type" "")
+          ;; wrap-params has already consumed a urlencoded form body
+          form? (str/includes? content-type "application/x-www-form-urlencoded")
+          s (if (and body (not form?)) (slurp body) "")
           params (cond
+                   form? (update-keys form-params keyword)
                    (str/blank? s) {}
-                   (str/includes? ct "application/json") (json/read-str s :key-fn keyword)
-                   (str/includes? ct "application/x-www-form-urlencoded") (parse-form s))]
+                   (str/includes? content-type "application/json") (json/read-str s :key-fn keyword))]
       (when (and (map? params) (every? #(or (nil? %) (string? %)) (vals params)))
         params))
     (catch Exception _ nil)))
-
-
-(defn- query-param
-  [{:keys [query-string]} k]
-  (some->> (re-find (re-pattern (str "(?:^|&)" k "=([^&]*)")) (or query-string ""))
-           second
-           (#(URLDecoder/decode ^String % "UTF-8"))))
 
 
 ;; ## Rendering
@@ -417,7 +399,7 @@
 
 (defn- move
   [req move-fn]
-  (if-let [direction ({"up" :up "down" :down} (query-param req "dir"))]
+  (if-let [direction ({"up" :up "down" :down} (get-in req [:query-params "dir"]))]
     (mutate req nil (fn [tx user _] (move-fn tx user {:id (get-in req [:params :id]) :direction direction})))
     (text-response 400 "Bad request")))
 

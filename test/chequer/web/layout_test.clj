@@ -11,30 +11,27 @@
 
 
 (defn- req
-  [& {:keys [cookie user] :or {user {:id 1 :name "greg" :title "Greg"}}}]
+  "A request; cookies is a map of name to value, as ring's wrap-cookies leaves in :cookies."
+  [& {:keys [cookies user] :or {user {:id 1 :name "greg" :title "Greg"}}}]
   (cond-> {:request-method :get
            :uri "/"
            :headers {}
            :chequer/cfg cfg
            :chequer/user user}
-    cookie (assoc-in [:headers "cookie"] cookie)))
+    cookies (assoc :cookies (update-vals cookies (fn [v] {:value v})))))
 
 
 (deftest viewer-tz-reads-the-cookie
-  (is (= "America/New_York" (layout/viewer-tz (req :cookie "tz=America/New_York"))))
-  (is (= "Asia/Tokyo" (layout/viewer-tz (req :cookie "a=b; tz=Asia/Tokyo; c=d")))))
-
-
-(deftest viewer-tz-decodes-an-escaped-cookie
-  (is (= "America/New_York" (layout/viewer-tz (req :cookie "tz=America%2FNew_York")))))
+  (is (= "America/New_York" (layout/viewer-tz (req :cookies {"tz" "America/New_York"}))))
+  (is (= "Asia/Tokyo" (layout/viewer-tz (req :cookies {"a" "b" "tz" "Asia/Tokyo" "c" "d"})))))
 
 
 (deftest viewer-tz-falls-back-to-config
   (is (= "Europe/Paris" (layout/viewer-tz (req))) "no cookie")
-  (is (= "Europe/Paris" (layout/viewer-tz (req :cookie "other=1"))) "no tz cookie")
-  (is (= "Europe/Paris" (layout/viewer-tz (req :cookie "tz=Nope/Zone"))) "unknown zone")
-  (is (= "Europe/Paris" (layout/viewer-tz (req :cookie "tz=../../etc"))) "malformed zone")
-  (is (= "Europe/Paris" (layout/viewer-tz (req :cookie "tz="))) "empty zone"))
+  (is (= "Europe/Paris" (layout/viewer-tz (req :cookies {"other" "1"}))) "no tz cookie")
+  (is (= "Europe/Paris" (layout/viewer-tz (req :cookies {"tz" "Nope/Zone"}))) "unknown zone")
+  (is (= "Europe/Paris" (layout/viewer-tz (req :cookies {"tz" "../../etc"}))) "malformed zone")
+  (is (= "Europe/Paris" (layout/viewer-tz (req :cookies {"tz" ""}))) "empty zone"))
 
 
 (deftest page-renders-the-shell

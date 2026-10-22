@@ -9,7 +9,10 @@
     [chequer.web.plans :as plans]
     [clojure.java.io :as io]
     [clojure.string :as str]
-    [ring-chez.adapter :as adapter]))
+    [ring-chez.adapter :as adapter]
+    [ring.middleware.cookies :refer [wrap-cookies]]
+    [ring.middleware.not-modified :refer [wrap-not-modified]]
+    [ring.middleware.params :refer [wrap-params]]))
 
 
 (defn- index
@@ -45,17 +48,23 @@
 
 
 (defn wrap-static
-  "Serve files under /js/ and /css/ from resources/public. Only a flat file name with
-  an allow-listed extension is served; anything else falls through to handler."
+  "Serve files under /js/ and /css/ from resources/public with a content-hash ETag, for
+  wrap-not-modified to revalidate. Only a flat file name with
+  an allow-listed extension is served; anything else falls through to handler. Unlike
+  ring.middleware.resource, this works for resources embedded in a built binary, which
+  can't be opened as a URL connection."
   [handler]
   (fn [{:keys [request-method uri] :as req}]
     (let [[_ dir file ext] (re-matches #"/(js|css)/([A-Za-z0-9_-][A-Za-z0-9._-]*\.(js|css))" uri)
           resource (when (and (= :get request-method) file)
                      (io/resource (str "public/" dir "/" file)))]
       (if (and resource (= dir ext))
-        {:status 200
-         :headers {"Content-Type" (static-content-types ext)}
-         :body (slurp resource)}
+        (let [body (slurp resource)]
+          {:status 200
+           :headers {"Content-Type" (static-content-types ext)
+                     "Cache-Control" "public, no-cache"
+                     "ETag" (str "\"" (Integer/toHexString (hash body)) "\"")}
+           :body body})
         (handler req)))))
 
 
@@ -74,7 +83,10 @@
       (live/wrap-touch live)
       (auth/wrap-auth (:auth cfg))
       (auth/wrap-origin-check)
+      (wrap-cookies)
+      (wrap-params)
       (wrap-static)
+      (wrap-not-modified)
       (wrap-system sys)
       (live/wrap-live live)))
 

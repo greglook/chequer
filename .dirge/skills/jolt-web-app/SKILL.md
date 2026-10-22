@@ -77,6 +77,12 @@ description: Build/extend a Jolt (Clojure on Chez Scheme) ring web app with ring
 - Pitfalls: wrap-datastar slurps the body of Datastar requests (`datastar-request: true`) for signals, so buffer the body (slurp → StringReader) and hand handlers a fresh reader. Malformed JSON there throws from inside wrap-datastar → catch it (only if the inner handler wasn't reached) and answer 400. Put wrap-datastar outermost so each SSE re-render reruns auth. A deleted resource's SSE render can return a self-removing `<script>` redirect fragment.
 - Testing: call handler with `:query-string "datastar-sse=true"`, take frames from `(:body r)` with `(first (async/alts!! [ch (async/timeout 2000)]))`, swap the ratom, take the next frame; close the channel and `ds/stop!` the scheduler in `finally`.
 
+## Ring-core middleware under Jolt (verified, Chequer)
+- Ring's own middleware is pure Clojure and runs unchanged: add `ring/ring-core {:mvn/version "1.15.4"}` and `ring/ring-codec {:mvn/version "1.3.0"}` to deps.edn. `wrap-params` (`:query-params`, `:form-params`, `:params`, string keys) and `wrap-cookies` (`(get-in req [:cookies "tz" :value])`, URL-decoded) work. Source is in `~/.m2/repository/ring/ring-core/<ver>/*.jar` if you need to read it.
+- wrap-params consumes a urlencoded body; slurping it again throws "Stream closed" (jolt streams, StringReader and ByteArrayInputStream alike). Read `:form-params` for form posts and slurp the body only for JSON. It also merges into `:params`, so check that it doesn't clobber route params (router `:params` is set later, inside).
+- `wrap-resource`/`wrap-content-type` pass tests but FAIL in `jolt build` binaries with embedded resources ("No matching field found: openConnection for class java.net.URL"). Keep a custom `io/resource` + `slurp` static middleware. Always smoke-test the built binary with curl for anything touching static files or resources.
+- Smoke-test recipe that worked: `(cd /tmp && (timeout 40 /tmp/cq/app --config c.ini > out.log 2>&1 &)); sleep 4; curl -m 5 ...`. Bash tool `background` mode and a foreground launch (hung until the 900s timeout) did not work.
+
 ## Server / handler
 - `(adapter/run-server handler {:port p})` returns a handle and serves on background threads; binds 127.0.0.1 by default (`:host`).
 - Keep -main alive: `(jolt.host/block-sigint) (jolt.host/park-until-interrupt) (adapter/stop-server server)`.

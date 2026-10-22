@@ -152,6 +152,25 @@
       (is (= 200 (:status (get-uri h "/css/app.css")))))))
 
 
+(deftest static-files-are-cacheable-and-revalidated-by-etag
+  (with-handler
+    (fn [h]
+      (let [r (get-uri h "/css/app.css")
+            etag (get-in r [:headers "ETag"])]
+        (is (re-matches #"\"[0-9a-f]+\"" etag))
+        (is (= "public, no-cache" (get-in r [:headers "Cache-Control"])))
+        (let [r2 (h {:request-method :get :uri "/css/app.css"
+                     :headers {"if-none-match" etag}})]
+          (is (= 304 (:status r2)))
+          (is (nil? (:body r2)))
+          (is (= etag (get-in r2 [:headers "ETag"]))))
+        (is (= 200 (:status (h {:request-method :get :uri "/css/app.css"
+                                :headers {"if-none-match" "\"stale\""}})))
+            "a different etag gets the full file")
+        (is (not= etag (get-in (get-uri h "/js/datastar.js") [:headers "ETag"]))
+            "etag depends on the content")))))
+
+
 (deftest mutating-requests-need-a-matching-origin
   (with-handler
     (fn [h]

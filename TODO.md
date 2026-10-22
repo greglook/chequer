@@ -8,10 +8,6 @@ A list of miscellaneous items I notice that I want to fix later.
 - CI workflow jobs should only run when relevant files have changed
 
 ## Framework
-- Adopt `ring-core` and use middleware from it instead of rolling our own where possible
-    - static asset serving
-    - not-modified caching
-    - others?
 - Pre-compress the datastar JS file and serve it directly if the request accepts gzip?
 - Adopt `clojure.tools.logging` for more structured logging output
 - HoneySQL for SQL formatting? Depends on how things shape up.

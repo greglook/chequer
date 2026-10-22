@@ -2,27 +2,14 @@
   "The page shell shared by every full-page response, and the viewer's time zone."
   (:require
     [chequer.time :as time]
-    [clojure.string :as str]
-    [hiccup2.core :as h])
-  (:import
-    java.net.URLDecoder))
-
-
-(defn- cookie-value
-  "The value of cookie `cookie-name` in the request's Cookie header, URL-decoded, or nil."
-  [req cookie-name]
-  (some->> (str/split (get-in req [:headers "cookie"] "") #";")
-           (map str/trim)
-           (some (fn [pair]
-                   (let [[k v] (str/split pair #"=" 2)]
-                     (when (= k cookie-name) v))))
-           (#(URLDecoder/decode ^String % "UTF-8"))))
+    [hiccup2.core :as h]))
 
 
 (defn viewer-tz
-  "The viewer's time zone id: the tz cookie if it names a known zone, else the configured one."
+  "The viewer's time zone id: the tz cookie if it names a known zone, else the configured one.
+  Expects the request to have passed through ring's wrap-cookies."
   [req]
-  (let [tz (cookie-value req "tz")]
+  (let [tz (get-in req [:cookies "tz" :value])]
     (if (time/valid-zone? tz)
       tz
       (get-in req [:chequer/cfg :server :time-zone]))))
