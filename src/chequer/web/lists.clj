@@ -114,13 +114,14 @@
       [:span.controls
        [:details.menu
         [:summary "State"]
-        (for [s [:working :abandoned :pending]
-              :when (not= s state)]
-          [:button {:type "button" :data-on:click (str "@post('" (state-url id s) "')")} (state-actions s)])
-        [:a {:href (str path "/history")} "History"]]
+        [:div.menu-items
+         (for [s [:working :abandoned :pending]
+               :when (not= s state)]
+           [:button {:type "button" :data-on:click (str "@post('" (state-url id s) "')")} (state-actions s)])
+         [:a {:href (str path "/history")} "History"]]]
        (edit-button signal)
        (move-buttons path)
-       [:button {:type "button" :data-on:click (web/confirmed "Delete this task?" (str "@delete('" path "')"))} "Delete"]]]
+       [:button.danger {:type "button" :data-on:click (web/confirmed "Delete this task?" (str "@delete('" path "')"))} "Delete"]]]
      (when-let [d (:task/description t)]
        [:details [:summary "Description"] [:div.markdown (raw (md/render d))]])
      (edit-form signal path
@@ -134,7 +135,7 @@
   (let [suffix (str list-id (when group-id (str "-" group-id)))]
     [:form.new-task {:data-on:submit (str (action "post" (str "/lists/" list-id "/tasks")) "; el.reset()")}
      (when group-id [:input {:type "hidden" :name "group" :value (str group-id)}])
-     (field "New task" "title" nil {:required true})
+     (field [:span.visually-hidden "New task"] "title" nil {:required true :placeholder "Add a task"})
      (errors-el (str "new-task-" suffix "-errors"))
      [:button "Add"]]))
 
@@ -153,9 +154,9 @@
       [:span.controls
        (edit-button signal)
        (move-buttons path)
-       [:button {:type "button" :data-task-count (str task-count)
-                 :data-on:click (str "confirm('Delete this group and its ' + el.dataset.taskCount + ' task(s)?') && "
-                                     "@delete('" path "')")}
+       [:button.danger {:type "button" :data-task-count (str task-count)
+                        :data-on:click (str "confirm('Delete this group and its ' + el.dataset.taskCount + ' task(s)?') && "
+                                            "@delete('" path "')")}
         "Delete"]]]
      (edit-form signal path
                 (field "Title" "title" (:list.group/title group) {:required true})
@@ -205,6 +206,7 @@
       (str (closed-count counts) " of " total " done")
       (when-not done?
         (due-el (:list/due-at l) (some-> (:list/due-at l) (< (:now v))) v))]
+     [:progress {:max (str (max total 1)) :value (str (closed-count counts))}]
      (when-let [d (:list/description l)]
        [:div.markdown (raw (md/render d))])
      [:div.controls
@@ -216,7 +218,7 @@
       (if archived?
         [:button {:type "button" :data-on:click (str "@post('" path "/unarchive')")} "Unarchive"]
         [:button {:type "button" :data-on:click (str "@post('" path "/archive')")} "Archive"])
-      [:button {:type "button" :data-on:click (web/confirmed "Delete this list?" (str "@delete('" path "')"))} "Delete"]]
+      [:button.danger {:type "button" :data-on:click (web/confirmed "Delete this list?" (str "@delete('" path "')"))} "Delete"]]
      (edit-form signal path
                 (field "Title" "title" (:list/title l) {:required true})
                 (field "Icon" "icon" (:list/icon l) {:size 4})
@@ -237,7 +239,7 @@
      [new-task-form id nil]
      (map #(render-group id % v) groups)
      [:form.new-group {:data-on:submit (str (action "post" (str "/lists/" id "/groups")) "; el.reset()")}
-      (field "New group" "title" nil {:required true})
+      (field [:span.visually-hidden "New group"] "title" nil {:required true :placeholder "Add a group"})
       (errors-el (str "new-list-group-" id "-errors"))
       [:button "Add group"]]]))
 
@@ -258,7 +260,8 @@
      " "
      [:span.summary (str (closed-count counts) " of " total " done")]
      (when done? [:span.badge.done "done"])
-     (due-el due (some-> due (< (:now v))) v)]))
+     (due-el due (some-> due (< (:now v))) v)
+     [:progress {:max (str (max total 1)) :value (str (closed-count counts))}]]))
 
 
 (defn- index-order
@@ -361,9 +364,8 @@
       (html-response 200
                      (layout/page req (if archived? "Archived lists" "Lists")
                                   [:h1 (if archived? "Archived lists" "Lists")]
-                                  [:p
-                                   [:a {:href "/lists/new"} "New list"]
-                                   " · "
+                                  [:p.actions
+                                   [:a.button.primary {:href "/lists/new"} "New list"]
                                    (if archived?
                                      [:a {:href "/"} "Show active"]
                                      [:a {:href "/lists?archived=1"} "Show archived"])]

@@ -37,7 +37,7 @@
       [:span.controls
        (edit-button signal)
        (move-buttons path)
-       [:button {:type "button" :data-on:click (confirmed "Delete this task?" (str "@delete('" path "')"))} "Delete"]]]
+       [:button.danger {:type "button" :data-on:click (confirmed "Delete this task?" (str "@delete('" path "')"))} "Delete"]]]
      (when-let [d (:plan.task/description t)]
        [:details [:summary "Description"] [:div.markdown (raw (md/render d))]])
      (edit-form signal path
@@ -51,7 +51,7 @@
   (let [suffix (str plan-id (when group-id (str "-" group-id)))]
     [:form.new-task {:data-on:submit (str (action "post" (str "/plans/" plan-id "/tasks")) "; el.reset()")}
      (when group-id [:input {:type "hidden" :name "group" :value (str group-id)}])
-     (field "New task" "title" nil {:required true})
+     (field [:span.visually-hidden "New task"] "title" nil {:required true :placeholder "Add a task"})
      (errors-el (str "new-plan-task-" suffix "-errors"))
      [:button "Add"]]))
 
@@ -68,7 +68,7 @@
       [:span.controls
        (edit-button signal)
        (move-buttons path)
-       [:button {:type "button" :data-on:click (confirmed "Delete this group and its tasks?" (str "@delete('" path "')"))}
+       [:button.danger {:type "button" :data-on:click (confirmed "Delete this group and its tasks?" (str "@delete('" path "')"))}
         "Delete"]]]
      (edit-form signal path
                 (field "Title" "title" (:plan.group/title group) {:required true})
@@ -89,10 +89,10 @@
      (when-let [d (:plan/description plan)]
        [:div.markdown (raw (md/render d))])
      [:div.controls
-      [:a.button {:href (str "/lists/new?plan=" id)} "Start a list from this plan"]
+      [:a.button.primary {:href (str "/lists/new?plan=" id)} "Start a list from this plan"]
       [:a {:href (str path "/history")} "History"]
       (edit-button signal)
-      [:button {:type "button" :data-on:click (confirmed "Delete this plan?" (str "@delete('" path "')"))} "Delete"]]
+      [:button.danger {:type "button" :data-on:click (confirmed "Delete this plan?" (str "@delete('" path "')"))} "Delete"]]
      (edit-form signal path
                 (field "Title" "title" (:plan/title plan) {:required true})
                 (field "Icon" "icon" (:plan/icon plan) {:size 4})
@@ -103,7 +103,7 @@
      [new-task-form id nil]
      (map #(vector render-group id %) groups)
      [:form.new-group {:data-on:submit (str (action "post" (str path "/groups")) "; el.reset()")}
-      (field "New group" "title" nil {:required true})
+      (field [:span.visually-hidden "New group"] "title" nil {:required true :placeholder "Add a group"})
       (errors-el (str "new-plan-group-" id "-errors"))
       [:button "Add group"]]]))
 
@@ -123,7 +123,7 @@
   (html-response 200
                  (layout/page req "Plans"
                               [:h1 "Plans"]
-                              [:p [:a {:href "/plans/new"} "New plan"]]
+                              [:p.actions [:a.button.primary {:href "/plans/new"} "New plan"]]
                               (if-let [ps (seq (plans/list-plans db))]
                                 [:ul.plans
                                  (for [p ps]

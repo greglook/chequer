@@ -41,10 +41,27 @@
     (is (str/includes? html "/js/datastar.js"))
     (is (str/includes? html "/css/app.css"))
     (is (str/includes? html "<main><h1>Hello</h1></main>"))
-    (doseq [[href label] [["/" "Lists"] ["/plans" "Plans"] ["/search" "Search"]]]
+    (is (str/includes? html "<a href=\"/\" aria-current=\"page\">Lists</a>"))
+    (doseq [[href label] [["/plans" "Plans"] ["/search" "Search"]]]
       (is (str/includes? html (str "<a href=\"" href "\">" label "</a>")) label))
     (is (str/includes? html "Greg"))
     (is (str/includes? html "Intl.DateTimeFormat"))))
+
+
+(deftest page-marks-the-current-section
+  (let [html (layout/page (assoc (req) :uri "/plans/3/history") "Plan" [:p "ok"])]
+    (is (str/includes? html "<a href=\"/plans\" aria-current=\"page\">Plans</a>"))
+    (is (str/includes? html "<a href=\"/\">Lists</a>")))
+  (let [html (layout/page (assoc (req) :uri "/tasks/9/history") "Task" [:p "ok"])]
+    (is (str/includes? html "<a href=\"/\" aria-current=\"page\">Lists</a>"))))
+
+
+(deftest page-has-a-theme-toggle
+  (let [html (layout/page (req) "Lists" [:p "ok"])]
+    (is (str/includes? html "localStorage.getItem('theme')"))
+    (is (str/includes? html "onclick=\"toggleTheme()\""))
+    (is (< (str/index-of html "localStorage.getItem") (str/index-of html "/css/app.css"))
+        "the saved theme applies before the stylesheet loads")))
 
 
 (deftest page-escapes-user-text
