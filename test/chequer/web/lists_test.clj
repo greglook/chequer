@@ -3,6 +3,7 @@
     [chequer.config :as config]
     [chequer.core :as core]
     [chequer.data.lists :as lists]
+    [chequer.data.plans :as plans]
     [chequer.db :as db]
     [chequer.live :as live]
     [chequer.test-helpers :as helpers]
@@ -35,16 +36,18 @@
 
 
 (defn- request
-  "Call h with a request; opts may carry :signals (sent as JSON) and :tz (the tz cookie)."
+  "Call h with a request; opts may carry :signals (sent as JSON), :form (a urlencoded body
+  string) and :tz (the tz cookie)."
   ([h method uri] (request h method uri {}))
-  ([h method uri {:keys [signals tz]}]
+  ([h method uri {:keys [signals form tz]}]
    (let [[path query] (str/split uri #"\?" 2)
          headers (cond-> {"origin" base-url}
                    tz (assoc "cookie" (str "tz=" tz))
-                   signals (assoc "content-type" "application/json"))]
+                   signals (assoc "content-type" "application/json")
+                   form (assoc "content-type" "application/x-www-form-urlencoded"))
+         body (or (some-> signals (json/write-str :escape-unicode false)) form)]
      (h (cond-> {:request-method method :uri path :query-string query :headers headers}
-          signals (assoc :body (ByteArrayInputStream.
-                                 (.getBytes ^String (json/write-str signals :escape-unicode false) "UTF-8"))))))))
+          body (assoc :body (ByteArrayInputStream. (.getBytes ^String body "UTF-8"))))))))
 
 
 (defn- owner
@@ -306,3 +309,108 @@
           (is (empty? (db/q d ["SELECT * FROM task"])))
           (let [other (create-list! h "Other")]
             (is (= 400 (:status (request h :post (str "/lists/" other "/tasks") {:signals {:title "x" :group (str g2)}}))))))))))
+
+
+(defn- make-plan!
+  "A plan titled title with groups {group-title [task-title...]} (nil for ungrouped). Returns its id."
+  [{:keys [db]} u title groups]
+  (:result
+    (db/with-tx [tx db]
+      (let [pid (plans/create-plan! tx u {:title title})]
+        (doseq [[gt tasks] groups
+                :let [gid (when gt (plans/create-group! tx u {:plan-id pid :title gt}))]
+                t tasks]
+          (plans/create-plan-task! tx u {:plan-id pid :group-id gid :title t}))
+        pid))))
+
+
+(defn- shape
+  "The list's display order as [ungrouped-titles [group-title task-titles]...]."
+  [{:keys [db]} lid]
+  (let [{:keys [ungrouped groups]} (lists/load-list db lid)]
+    [(mapv :task/title ungrouped)
+     (mapv (fn [{:keys [group tasks]}] [(:list.group/title group) (mapv :task/title tasks)]) groups)]))
+
+
+(def ^:private plan-ids-key
+  (keyword "plan_ids[]"))
+
+
+(deftest new-list-form-picks-plans-in-order
+  (with-app
+    (fn [h sys]
+      (let [u (owner h sys)
+            weekend (make-plan! sys u "Weekend" [[nil ["Passport"]] ["Clothes" ["Socks" "Hat"]]])
+            beach (make-plan! sys u "Beach" [["clothes" ["Swimsuit" "socks"]] ["Fun" ["Kite"]]])]
+        (testing "the form lists the plans, with ?plan= pre-selected and first"
+          (let [body (:body (request h :get (str "/lists/new?plan=" beach)))]
+            (is (str/includes? body "name=\"plan_ids[]\""))
+            (is (not (re-find #"checked=\"\d" body)) "checked is a boolean attribute")
+            (is (< (str/index-of body "Beach") (str/index-of body "Weekend")))
+            (is (re-find (re-pattern (str "checked[^>]*value=\"" beach "\"|value=\"" beach "\"[^>]*checked")) body))
+            (is (not (re-find (re-pattern (str "checked[^>]*value=\"" weekend "\"|value=\"" weekend "\"[^>]*checked")) body)))))
+        (testing "a plain form post creates the list from the plans in the submitted order"
+          (let [r (request h :post "/lists" {:form (str "title=Trip&plan_ids%5B%5D=" weekend "&plan_ids%5B%5D=" beach)})
+                lid (parse-long (second (re-find #"^/lists/(\d+)$" (get-in r [:headers "Location"]))))]
+            (is (= 303 (:status r)))
+            (is (= [["Passport"] [["Clothes" ["Socks" "Hat" "Swimsuit"]] ["Fun" ["Kite"]]]] (shape sys lid))
+                "groups merge by title, and the duplicate socks is skipped")
+            (is (= ["add-plan" "add-plan"]
+                   (map :action (db/q (:db sys) ["SELECT action FROM event WHERE list_id = ? AND action = 'add-plan'" lid]))))))
+        (testing "one plan arrives as a single field"
+          (let [r (request h :post "/lists" {:form (str "title=Solo&plan_ids%5B%5D=" beach)})
+                lid (parse-long (second (re-find #"^/lists/(\d+)$" (get-in r [:headers "Location"]))))]
+            (is (= [[] [["clothes" ["Swimsuit" "socks"]] ["Fun" ["Kite"]]]] (shape sys lid)))))
+        (testing "an invalid title creates nothing, even with plans"
+          (let [before (count (db/q (:db sys) ["SELECT * FROM task"]))
+                r (request h :post "/lists" {:signals {:title " " plan-ids-key [(str weekend)]}})]
+            (is (str/includes? (:body r) "id=\"new-list-errors\""))
+            (is (= before (count (db/q (:db sys) ["SELECT * FROM task"]))))))
+        (is (= 404 (:status (request h :post "/lists" {:signals {:title "X" plan-ids-key ["999"]}}))))
+        (is (= 400 (:status (request h :post "/lists" {:signals {:title "X" plan-ids-key ["nope"]}}))))))))
+
+
+(deftest adding-plans-to-a-list-flashes-counts-and-updates-viewers
+  (with-app
+    (fn [h sys]
+      (let [u (owner h sys)
+            packing (make-plan! sys u "Packing" [[nil ["Passport" "Charger"]] ["Clothes" ["Socks"]]])
+            lid (create-list! h "Trip")
+            add (fn [pids] (request h :post (str "/lists/" lid "/add-plans") {:signals {plan-ids-key (mapv str pids)}}))]
+        (testing "the list page offers the plans"
+          (let [body (:body (request h :get (str "/lists/" lid)))]
+            (is (str/includes? body (str "/lists/" lid "/add-plans")))
+            (is (str/includes? body (str "id=\"list-" lid "-flash\"")))))
+        (let [ch (:body (request h :get (str "/lists/" lid "?datastar-sse=true&datastar-selector=%23live")))]
+          (try
+            (take-frame ch)
+            (let [r (add [packing])]
+              (is (= 200 (:status r)))
+              (is (str/includes? (:body r) (str "id=\"list-" lid "-flash\"")))
+              (is (str/includes? (:body r) "Added Packing: 3 tasks")))
+            (testing "other viewers get a live update"
+              (let [frame (take-frame ch)]
+                (is (str/includes? frame "Passport"))
+                (is (str/includes? frame "Clothes"))))
+            (finally
+              (async/close! ch))))
+        (testing "adding it again skips everything"
+          (is (str/includes? (:body (add [packing])) "Added Packing: 0 tasks, 3 skipped")))
+        (testing "after a task is removed, re-adding restores only that one"
+          (db/with-tx [tx (:db sys)]
+            (lists/delete-task! tx u {:id (:id (db/q1 (:db sys) ["SELECT id FROM task WHERE title = 'Charger'"]))}))
+          (is (str/includes? (:body (add [packing])) "Added Packing: 1 task, 2 skipped")))
+        (testing "choosing no plans is an error"
+          (let [r (request h :post (str "/lists/" lid "/add-plans") {:signals {}})]
+            (is (str/includes? (:body r) (str "id=\"add-plans-" lid "-errors\"")))
+            (is (str/includes? (:body r) "Plans must include at least one plan"))))
+        (is (= 404 (:status (add [999]))))
+        (is (= 404 (:status (request h :post "/lists/999/add-plans" {:signals {plan-ids-key [(str packing)]}}))))))))
+
+
+(deftest plan-page-starts-a-list-from-the-plan
+  (with-app
+    (fn [h sys]
+      (let [pid (make-plan! sys (owner h sys) "Packing" [])]
+        (is (str/includes? (:body (request h :get (str "/plans/" pid)))
+                           (str "href=\"/lists/new?plan=" pid "\"")))))))

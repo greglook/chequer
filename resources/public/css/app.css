@@ -79,3 +79,24 @@ details.menu {
 .toggle.on {
   font-weight: bold;
 }
+
+.plan-picker ol {
+  padding-left: 1.5rem;
+}
+
+.plan-picker li {
+  display: flex;
+  gap: 0.25rem;
+  align-items: baseline;
+}
+
+.plan-picker label {
+  margin-right: auto;
+}
+
+.flash p {
+  background: #dfd;
+  color: #060;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+}

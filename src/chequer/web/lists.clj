@@ -1,6 +1,7 @@
 (ns chequer.web.lists
   "List pages, their SSE streams, and the list, group and task mutation handlers."
   (:require
+    [chequer.data.add-plan :as add-plan]
     [chequer.data.lists :as lists]
     [chequer.data.plans :as plans]
     [chequer.db :as db]
@@ -280,6 +281,72 @@
        [:p.empty (if archived? "No archived lists." "No lists yet.")])]))
 
 
+;; ## Adding plans
+
+(def ^:private plan-ids-key
+  (keyword "plan_ids[]"))
+
+
+(defn- plan-picker
+  "Checkboxes choosing plans, submitted as plan_ids[] in the order shown, with up and down
+  buttons that reorder them in the page. The plans with ids in selected come first, checked,
+  in that order."
+  [all-plans selected]
+  (let [by-id (into {} (map (juxt :plan/id identity)) all-plans)
+        chosen (keep by-id (distinct selected))
+        chosen? (set (map :plan/id chosen))]
+    (when (seq all-plans)
+      [:fieldset.plan-picker
+       [:legend "Plans"]
+       [:ol
+        (for [p (concat chosen (remove #(chosen? (:plan/id %)) all-plans))]
+          [:li
+           [:label
+            [:input {:type "checkbox" :name "plan_ids[]" :value (str (:plan/id p)) :checked (contains? chosen? (:plan/id p))}]
+            [:span.icon (:plan/icon p)] " " (:plan/title p)]
+           [:button {:type "button" :title "Move up"
+                     :data-on:click "el.closest('li').previousElementSibling?.before(el.closest('li'))"} "↑"]
+           [:button {:type "button" :title "Move down"
+                     :data-on:click "el.closest('li').nextElementSibling?.after(el.closest('li'))"} "↓"]])]])))
+
+
+(defn- plan-ids
+  "The ids of the body's plan_ids[], in order and without repeats."
+  [body]
+  (vec (distinct (keep web/parse-id (get body plan-ids-key)))))
+
+
+(defn- pluralize
+  [n noun]
+  (str n " " noun (when (not= 1 n) "s")))
+
+
+(defn flash-message
+  "A sentence describing the result of add-plan!, e.g. \"Added Packing: 12 tasks, 3 skipped\"."
+  [{:keys [plan-title tasks-created tasks-skipped]}]
+  (str "Added " plan-title ": " (pluralize tasks-created "task")
+       (when (pos? tasks-skipped) (str ", " tasks-skipped " skipped"))))
+
+
+(defn- flash-id
+  [list-id]
+  (str "list-" list-id "-flash"))
+
+
+(defn- add-plans-form
+  "The form adding plans to list list-id, outside #live so re-renders keep its choices, and
+  the flash element its results go to."
+  [list-id all-plans]
+  (when (seq all-plans)
+    (list [:details.add-plans
+           [:summary "Add plans"]
+           [:form {:data-on:submit (str (action "post" (str "/lists/" list-id "/add-plans")) "; el.reset()")}
+            (plan-picker all-plans nil)
+            (errors-el (str "add-plans-" list-id "-errors"))
+            [:button "Add"]]]
+          [:div.flash {:id (flash-id list-id)}])))
+
+
 ;; ## Pages
 
 (defn index
@@ -302,8 +369,9 @@
 
 
 (defn new-page
-  "GET /lists/new. The form works as a plain POST and, with Datastar, shows errors inline."
-  [req]
+  "GET /lists/new. The form works as a plain POST and, with Datastar, shows errors inline.
+  ?plan=<id> pre-selects that plan."
+  [{:chequer/keys [db] :as req}]
   (html-response 200
                  (layout/page req "New list"
                               [:h1 "New list"]
@@ -312,6 +380,8 @@
                                (field "Icon" "icon" nil {:size 4})
                                (field "Due" "due" nil {:type "datetime-local"})
                                [:label "Description" [:textarea {:name "description" :rows 4}]]
+                               (plan-picker (plans/list-plans db)
+                                            (some-> (web/query-param req "plan") parse-long vector))
                                (errors-el "new-list-errors")
                                [:button "Create"]])))
 
@@ -329,7 +399,8 @@
       (:jolt.datastar/sse-request req) (html-response 200 (if fragment (html fragment) (web/redirect-script "/")))
       fragment (html-response 200
                               (layout/page req (:title (db/q1 db ["SELECT title FROM list WHERE id = ?" id]))
-                                           [:div#live (ds/init-opts {:selector "#live"}) fragment]))
+                                           [:div#live (ds/init-opts {:selector "#live"}) fragment]
+                                           (add-plans-form id (plans/list-plans db))))
       :else (text-response 404 "Not found"))))
 
 
@@ -376,11 +447,14 @@
 
 
 (defn create-list
-  "POST /lists: 303 to the new list, or, from Datastar, an SSE redirect."
+  "POST /lists: creates the list and adds the plan_ids[] plans to it, in order, then 303s to
+  it, or, from Datastar, sends an SSE redirect."
   [req]
   (mutate req "new-list-errors"
           (fn [tx user body]
-            (lists/create-list! tx user (merge {:title nil} (list-attrs body req))))
+            (let [id (lists/create-list! tx user (merge {:title nil} (list-attrs body req)))]
+              (add-plan/add-plans! tx user id (plan-ids body))
+              id))
           #(web/created-response req (str "/lists/" %))))
 
 
@@ -486,6 +560,25 @@
     (text-response 400 "Bad request")))
 
 
+(defn add-plans
+  "POST /lists/:id/add-plans: adds the plan_ids[] plans, in order, and answers with a flash
+  describing what each added."
+  [req]
+  (let [id (by-id req)]
+    (mutate req (str "add-plans-" id "-errors")
+            (fn [tx user body]
+              (let [pids (plan-ids body)]
+                (when (empty? pids)
+                  (web/invalid! {:plans "must include at least one plan"}))
+                (add-plan/add-plans! tx user id pids)))
+            (fn [results]
+              (web/sse-response
+                [(ds/patch-elements-event (html [:div.flash {:id (flash-id id)}
+                                                 (for [r results] [:p (flash-message r)])])
+                                          nil "outer")
+                 (ds/patch-elements-event (html (errors-el (str "add-plans-" id "-errors"))) nil "outer")])))))
+
+
 (def routes
   "List routes as [method pattern handler]."
   [[:get [] index]
@@ -497,6 +590,7 @@
    [:delete ["lists" :id] delete-list]
    [:post ["lists" :id "archive"] archive-list]
    [:post ["lists" :id "unarchive"] unarchive-list]
+   [:post ["lists" :id "add-plans"] add-plans]
    [:post ["lists" :id "groups"] create-group]
    [:post ["lists" :id "tasks"] create-task]
    [:put ["list-groups" :id] update-group]

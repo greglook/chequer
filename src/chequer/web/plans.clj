@@ -89,6 +89,7 @@
      (when-let [d (:plan/description plan)]
        [:div.markdown (raw (md/render d))])
      [:div.controls
+      [:a.button {:href (str "/lists/new?plan=" id)} "Start a list from this plan"]
       (edit-button signal)
       [:button {:type "button" :data-on:click (confirmed "Delete this plan?" (str "@delete('" path "')"))} "Delete"]]
      (edit-form signal path

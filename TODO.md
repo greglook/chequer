@@ -18,6 +18,8 @@ A list of miscellaneous items I notice that I want to fix later.
 
 ## Gaps
 - Icons need an emoji picker built in instead of requiring the user to enter one directly
+- "Add Plans" to a list should be a modal view, not a collapsed list on the page
 
 ## Bugs
-- Reordering doesn't seem to work yet
+- Reordering groups doesn't seem to work yet (tasks does)
+- Date input has a picker but requires a time entry right now

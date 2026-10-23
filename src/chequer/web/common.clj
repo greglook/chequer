@@ -67,10 +67,29 @@
 
 ;; ## Request bodies
 
+(defn- list-key?
+  "True for a field named like plan_ids[], which carries a list of values."
+  [k]
+  (str/ends-with? (name k) "[]"))
+
+
+(defn- normalize-param
+  "[k v] with a list field's value as a vector of strings (one value arrives as a plain
+  string), or nil when v isn't a string, or for a list field, strings."
+  [[k v]]
+  (if (list-key? k)
+    (let [vs (if (string? v) [v] v)]
+      (when (and (sequential? vs) (every? string? vs))
+        [k (vec vs)]))
+    (when (or (nil? v) (string? v))
+      [k v])))
+
+
 (defn read-params
   "The request's Datastar signals (JSON) or form fields (parsed by ring's wrap-params) as a
   map of keyword to string, or nil when the body is malformed or holds non-string values.
-  The tab id glimmer-datastar's page signals carry under :jolt is dropped."
+  A field whose name ends in [] is a vector of strings instead. The tab id
+  glimmer-datastar's page signals carry under :jolt is dropped."
   [{:keys [body headers form-params]}]
   (try
     (let [content-type (get headers "content-type" "")
@@ -81,8 +100,10 @@
                    form? (update-keys form-params keyword)
                    (str/blank? s) {}
                    (str/includes? content-type "application/json") (dissoc (json/read-str s :key-fn keyword) :jolt))]
-      (when (and (map? params) (every? #(or (nil? %) (string? %)) (vals params)))
-        params))
+      (when (map? params)
+        (let [normalized (keep normalize-param params)]
+          (when (= (count normalized) (count params))
+            (into {} normalized)))))
     (catch Exception _ nil)))
 
 

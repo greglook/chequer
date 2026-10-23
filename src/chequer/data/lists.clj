@@ -181,12 +181,14 @@
 ;; ## Groups
 
 (defn create-group!
-  "Create a group in list :list-id from {:title :icon}, appended after the others. Returns its id."
-  [tx user {:keys [list-id] :as attrs}]
+  "Create a group in list :list-id from {:title :icon}, appended after the others. :source-id,
+  if given, is the plan group it was copied from. Returns its id."
+  [tx user {:keys [list-id source-id] :as attrs}]
   (plans/fetch-existing tx "list" list-id)
   (let [v (plans/clean group-schemas (merge {:title nil} attrs))
         id (db/insert! tx :list_group (assoc v
                                              :list_id list-id
+                                             :source_id source-id
                                              :order (plans/next-order tx "list_group" ["list_id = ?" list-id])))]
     (record! tx user "list.group" id list-id :create {:title (:title v)})
     (db/touch! [:list list-id])
@@ -226,8 +228,9 @@
 
 (defn create-task!
   "Create a pending task in list :list-id (and group :group-id, if given) from the task
-  attributes, appended after its siblings. Returns its id."
-  [tx user {:keys [list-id group-id] :as attrs}]
+  attributes, appended after its siblings. :source-id, if given, is the plan task it was
+  copied from. Returns its id."
+  [tx user {:keys [list-id group-id source-id] :as attrs}]
   (plans/fetch-existing tx "list" list-id)
   (let [v (plans/clean task-schemas (merge {:title nil} attrs))
         now (time/now-ms)
@@ -235,6 +238,7 @@
                        (assoc v
                               :list_id list-id
                               :group_id group-id
+                              :source_id source-id
                               :order (plans/next-order tx "task" ["list_id = ? AND group_id IS ?" list-id group-id])
                               :created_at now :created_by (:id user)
                               :updated_at now :updated_by (:id user)))]
