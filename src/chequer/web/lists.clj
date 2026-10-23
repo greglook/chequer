@@ -165,25 +165,35 @@
                 [:button "Save"])]))
 
 
-(defn- visible
-  "The tasks the view shows: with ?mine=1, only those assigned to the viewer."
-  [tasks {:keys [mine? me]}]
-  (if mine?
-    (filter #(= me (:task/assignee %)) tasks)
-    tasks))
+(defn- shown?
+  "True when the view shows task t: with ?mine=1, only when it's assigned to the viewer."
+  [t {:keys [mine? me]}]
+  (or (not mine?) (= me (:task/assignee t))))
+
+
+(defn- task-view
+  "#task-<id> for the view v, re-rendered when the task's topic is touched. Renders nothing
+  when the task is gone or the view filters it out."
+  [{:chequer/keys [db live]} list-id task-id v]
+  @(live/cell live [:list list-id :task task-id])
+  (when-let [t (lists/load-task db task-id)]
+    (when (shown? t v)
+      (render-task t v))))
 
 
 (defn- task-list
-  [tasks v]
-  [:ul.tasks (map #(vector render-task % v) (visible tasks v))])
+  [src list-id task-ids v]
+  [:ul.tasks (map #(vector task-view src list-id % v) task-ids)])
 
 
 (defn- render-group
-  [list-id {:keys [group tasks]} v]
+  "A group's section, rendered as a component. Its root has no id, so glimmer-datastar keeps the
+  parts inside it, the header and each task, patchable on their own."
+  [src list-id {:keys [group task-ids]} v]
   (let [id (:list.group/id group)]
-    [:section.list-group {:id (str "list-group-" id)}
-     [render-group-header group (count tasks)]
-     (task-list tasks v)
+    [:section.list-group
+     [render-group-header group (count task-ids)]
+     (task-list src list-id task-ids v)
      [new-task-form list-id id]]))
 
 
@@ -228,26 +238,38 @@
                 [:button "Save"])]))
 
 
-(defn- render-loaded-list
-  [{l :list :keys [ungrouped groups]} v]
-  (let [id (:list/id l)
-        all (concat ungrouped (mapcat :tasks groups))
-        counts (merge (zipmap lists/states (repeat 0)) (frequencies (map :task/state all)))]
-    [:div.list {:id (str "list-" id)}
-     [render-header l counts v]
-     (task-list ungrouped v)
-     [new-task-form id nil]
-     (map #(render-group id % v) groups)
-     [:form.new-group {:data-on:submit (str (action "post" (str "/lists/" id "/groups")) "; el.reset()")}
-      (field [:span.visually-hidden "New group"] "title" nil {:required true :placeholder "Add a group"})
-      (errors-el (str "new-list-group-" id "-errors"))
-      [:button "Add group"]]]))
+(defn- header-view
+  "#list-<id>-header for the view v, re-rendered when the list's header topic is touched."
+  [{:chequer/keys [db live]} list-id v]
+  @(live/cell live [:list list-id :header])
+  (when-let [{l :list :keys [counts]} (lists/load-list-header db list-id)]
+    (render-header l counts v)))
+
+
+(defn- list-body
+  "The contents of #list-<id> for the view v, re-rendered when the list's structure topic is
+  touched. The header and each task are components reading topics of their own, so a change
+  to one task renders and sends only that task and the header. A deleted list sends the
+  viewer to the index."
+  [{:chequer/keys [db live] :as src} list-id v]
+  @(live/cell live [:list list-id :structure])
+  (if-let [{:keys [ungrouped groups]} (lists/load-list-structure db list-id)]
+    (list [header-view src list-id v]
+          (task-list src list-id ungrouped v)
+          [new-task-form list-id nil]
+          (map #(vector render-group src list-id % v) groups)
+          [:form.new-group {:data-on:submit (str (action "post" (str "/lists/" list-id "/groups")) "; el.reset()")}
+           (field [:span.visually-hidden "New group"] "title" nil {:required true :placeholder "Add a group"})
+           (errors-el (str "new-list-group-" list-id "-errors"))
+           [:button "Add group"]])
+    (web/redirect-el "/")))
 
 
 (defn render-list
-  "#list-<id> as hiccup for the view v, or nil if the list doesn't exist."
-  [db list-id v]
-  (some-> (lists/load-list db list-id) (render-loaded-list v)))
+  "#list-<id> as hiccup for the view v, reading the list through src (see web/sources)."
+  [src list-id v]
+  [:div.list {:id (str "list-" list-id)}
+   [list-body src list-id v]])
 
 
 (defn- render-index-row
@@ -394,18 +416,17 @@
   "GET /lists/:id. The page opens an SSE request to the same URL (with its ?mine=1, if any),
   which glimmer-datastar re-renders into #live whenever the list's topic is touched; a
   deleted list sends the viewer to the index."
-  [{:chequer/keys [db live] :keys [params] :as req}]
+  [{:chequer/keys [db] :keys [params] :as req}]
   (let [id (:id params)
-        _ @(live/cell live [:list id])
-        _ @(live/cell live [:lists])
-        fragment (render-list db id (view req))]
-    (cond
-      (:jolt.datastar/sse-request req) (html-response 200 (if fragment (html fragment) (web/redirect-script "/")))
-      fragment (html-response 200
-                              (layout/page req (:title (db/q1 db ["SELECT title FROM list WHERE id = ?" id]))
-                                           [:div#live (ds/init-opts {:selector "#live"}) fragment]
-                                           (add-plans-form id (plans/list-plans db))))
-      :else (text-response 404 "Not found"))))
+        fragment (render-list (web/sources req) id (view req))]
+    (if (:jolt.datastar/sse-request req)
+      (html-response 200 (html fragment))
+      (if-let [{:keys [title]} (db/q1 db ["SELECT title FROM list WHERE id = ?" id])]
+        (html-response 200
+                       (layout/page req title
+                                    [:div#live (ds/init-opts {:selector "#live"}) fragment]
+                                    (add-plans-form id (plans/list-plans db))))
+        (text-response 404 "Not found")))))
 
 
 ;; ## Mutations

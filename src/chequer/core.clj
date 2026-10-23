@@ -18,12 +18,16 @@
 
 
 (defn- healthz
-  "GET /healthz handler: 200 ok once the database answers SELECT 1."
-  [{:chequer/keys [db]}]
+  "GET /healthz handler: 200 ok once the database answers SELECT 1, followed by the open
+  stream count and the component cache's counters."
+  [{:chequer/keys [db live]}]
   (db/q1 db ["SELECT 1"])
-  {:status 200
-   :headers {"Content-Type" "text/plain; charset=utf-8"}
-   :body "ok"})
+  (let [{:keys [streams cache]} (live/stats live)]
+    {:status 200
+     :headers {"Content-Type" "text/plain; charset=utf-8"}
+     :body (str "ok\n"
+                "streams=" streams "\n"
+                (str/join " " (cons "cache" (map (fn [[k v]] (str (name k) "=" v)) (sort cache)))) "\n")}))
 
 
 (def ^:private routes
@@ -113,7 +117,7 @@
       (let [{:keys [host port]} (get-in cfg [:server :listen])
             sys {:db db :cfg cfg :live (live/live)}
             server (adapter/run-server (wrap-request-log (handler sys))
-                                       {:host host :port port})]
+                                       {:host host :port port :strategy :fibers})]
         (assoc sys :server server))
       (catch Exception e
         (db/close! db)

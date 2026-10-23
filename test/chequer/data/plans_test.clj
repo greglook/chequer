@@ -57,7 +57,7 @@
   (with-user
     (fn [d u]
       (let [{pid :result topics :topics} (tx! d #(plans/create-plan! % u {:title " Packing " :description "" :icon "🧳"}))]
-        (is (= #{[:plan pid] [:plans]} topics))
+        (is (= #{[:plan pid] [:plan pid :header] [:plan pid :structure] [:plans]} topics))
         (is (= {:plan/id pid :plan/title "Packing" :plan/description nil :plan/icon "🧳"
                 :plan/created-at 1000 :plan/created-by (:id u) :plan/updated-at 1000 :plan/updated-by (:id u)}
                (:plan (plans/load-plan d pid))))
@@ -123,7 +123,7 @@
   (with-user
     (fn [d u]
       (let [{:keys [pid g2 b dd]} (seed d u)]
-        (is (= #{[:plan pid]} (:topics (tx! d #(plans/move-group! % u {:id g2 :direction :up})))))
+        (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/move-group! % u {:id g2 :direction :up})))))
         (tx! d #(plans/move-plan-task! % u {:id b :direction :up}))
         (tx! d #(plans/move-plan-task! % u {:id dd :direction :down}))
         (is (= [["c"] [["G2" ["d"]] ["G1" ["b" "a"]]]] (shape (plans/load-plan d pid))))
@@ -137,7 +137,7 @@
     (fn [d u]
       (let [{:keys [pid g1 a]} (seed d u)
             before (count (events d))]
-        (is (= #{[:plan pid]} (:topics (tx! d #(plans/update-group! % u {:id g1 :title "Clothes" :icon "👕"})))))
+        (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/update-group! % u {:id g1 :title "Clothes" :icon "👕"})))))
         (tx! d #(plans/update-plan-task! % u {:id a :title "a2" :estimate "" :description "x"}))
         (is (= [{:entity_type "plan.group" :entity_id g1 :plan_id pid :action "update"
                  :data {:title ["G1" "Clothes"] :icon [nil "👕"]}}
@@ -151,7 +151,7 @@
     (fn [d u]
       (let [{:keys [pid g1 a b]} (seed d u)
             before (count (events d))]
-        (is (= #{[:plan pid]} (:topics (tx! d #(plans/delete-group! % u {:id g1})))))
+        (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/delete-group! % u {:id g1})))))
         (is (= [["c"] [["G2" ["d"]]]] (shape (plans/load-plan d pid))))
         (is (= [{:entity_type "plan.task" :entity_id a :plan_id pid :action "delete" :data {:title "a"}}
                 {:entity_type "plan.task" :entity_id b :plan_id pid :action "delete" :data {:title "b"}}

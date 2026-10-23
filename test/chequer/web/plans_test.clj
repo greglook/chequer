@@ -122,7 +122,7 @@
           (is (str/includes? body "datastar-sse=true"))
           (is (str/includes? body "id=\"live\""))
           (is (str/includes? body (str "id=\"plan-" pid "\"")))
-          (is (str/includes? body (str "id=\"plan-group-" g "\"")))
+          (is (str/includes? body (str "id=\"plan-group-" g "-header\"")))
           (is (str/includes? body "Socks"))
           (is (< (str/index-of body "Passport") (str/index-of body "Clothes")) "ungrouped tasks come first"))
         (is (= 404 (:status (request h :get "/plans/999"))))))))
@@ -163,6 +163,29 @@
             (is (str/includes? frame "window.location"))
             (is (str/includes? frame "/plans"))))
         (async/close! ch)))))
+
+
+(deftest editing-a-task-sends-only-that-task
+  (with-app
+    (fn [h sys]
+      (let [pid (create-plan! h "Packing")
+            _ (request h :post (str "/plans/" pid "/tasks") {:title "Passport"})
+            _ (request h :post (str "/plans/" pid "/tasks") {:title "Charger"})
+            [a b] (map :id (db/q (:db sys) ["SELECT id FROM plan_task ORDER BY id"]))
+            ch (:body (request h :get (str "/plans/" pid "?datastar-sse=true&datastar-selector=%23live")))
+            part-ids #(set (map second (re-seq #"id=\"(plan-task-\d+|plan-\d+-header|plan-group-\d+-header)\"" %)))]
+        (try
+          (is (= #{(str "plan-task-" a) (str "plan-task-" b) (str "plan-" pid "-header")} (part-ids (take-frame ch))))
+          (is (= 204 (:status (request h :put (str "/plan-tasks/" b) {:title "USB charger"}))))
+          (let [frame (take-frame ch)]
+            (is (str/includes? frame "data: mode outer"))
+            (is (= #{(str "plan-task-" b)} (part-ids frame)))
+            (is (str/includes? frame "USB charger")))
+          (testing "renaming the plan sends only the header"
+            (is (= 204 (:status (request h :put (str "/plans/" pid) {:title "Packing list"}))))
+            (is (= #{(str "plan-" pid "-header")} (part-ids (take-frame ch)))))
+          (finally
+            (async/close! ch)))))))
 
 
 (deftest groups-and-tasks-can-be-edited-moved-and-deleted

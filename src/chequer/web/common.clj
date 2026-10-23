@@ -23,12 +23,26 @@
   jh/raw)
 
 
+(defn sources
+  "What live components read from the request: the database and the live state. They take
+  it as an argument, which is the same for every request, so their cache entries are shared
+  by every stream."
+  [req]
+  (select-keys req [:chequer/db :chequer/live]))
+
+
 ;; ## Responses
 
-(defn redirect-script
+(defn redirect-el
   "A script element that sends the browser to path (a server-built path, not user input)."
   [path]
-  (html [:script {:data-effect "el.remove()"} (raw (str "window.location.href = \"" path "\""))]))
+  [:script {:data-effect "el.remove()"} (raw (str "window.location.href = \"" path "\""))])
+
+
+(defn redirect-script
+  "redirect-el as a string."
+  [path]
+  (html (redirect-el path)))
 
 
 (defn redirect-event

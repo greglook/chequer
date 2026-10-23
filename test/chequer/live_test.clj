@@ -3,7 +3,7 @@
     [chequer.live :as live]
     [clojure.core.async :as async]
     [clojure.string :as str]
-    [clojure.test :refer [deftest is]])
+    [clojure.test :refer [deftest is testing]])
   (:import
     (java.io
       ByteArrayInputStream)))
@@ -55,6 +55,64 @@
           (is (str/includes? frame "event: datastar-patch-elements"))
           (is (str/includes? frame "<p>rev 1 true</p>")))
         (async/close! ch))
+      (finally
+        (live/stop! l)))))
+
+
+(defn- sse-request
+  []
+  {:request-method :get :uri "/plans/1" :query-string "datastar-sse=true" :headers {}})
+
+
+(defn- await-streams
+  "Wait up to a second for l's open stream count to be n, and return it."
+  [l n]
+  (loop [tries 100]
+    (let [c (live/stream-count l)]
+      (if (or (= n c) (zero? tries))
+        c
+        (do (async/<!! (async/timeout 10))
+            (recur (dec tries)))))))
+
+
+(deftest idle-streams-get-heartbeats
+  (let [l (live/live {:heartbeat-ms 50})
+        handler (live/wrap-live (fn [_] {:status 200 :body (str "<p>rev " @(live/cell l [:plan 1]) "</p>")}) l)]
+    (try
+      (let [ch (:body (handler (sse-request)))]
+        (is (= 1 (live/stream-count l)))
+        (is (str/includes? (take-frame ch) "<p>rev 0</p>"))
+        (is (= live/heartbeat (take-frame ch)) "a quiet stream gets a heartbeat")
+        (is (= live/heartbeat (take-frame ch)) "and another")
+        (live/touch! l #{[:plan 1]})
+        (is (str/includes? (take-frame ch) "<p>rev 1</p>") "frames still arrive between heartbeats")
+        (async/close! ch))
+      (finally
+        (live/stop! l)))))
+
+
+(deftest closed-streams-are-released
+  (let [l (live/live {:heartbeat-ms 50})
+        renders (atom 0)
+        handler (live/wrap-live (fn [_]
+                                  (swap! renders inc)
+                                  {:status 200 :body (str "<p>rev " @(live/cell l [:plan 1]) "</p>")})
+                                l)]
+    (try
+      (testing "a stream the client left"
+        (let [ch (:body (handler (sse-request)))]
+          (take-frame ch)
+          (is (= 1 @renders))
+          (async/close! ch)
+          (is (zero? (await-streams l 0)) "is no longer counted")
+          (live/touch! l #{[:plan 1]})
+          (async/<!! (async/timeout 100))
+          (is (= 1 @renders) "renders no more")))
+      (testing "a stream whose render ends it"
+        (let [ended (live/wrap-live (fn [_] @(live/cell l [:plan 1]) {:status 401 :body "gone"}) l)
+              ch (:body (ended (sse-request)))]
+          (is (nil? (take-frame ch)) "is closed")
+          (is (zero? (await-streams l 0)) "is no longer counted")))
       (finally
         (live/stop! l)))))
 

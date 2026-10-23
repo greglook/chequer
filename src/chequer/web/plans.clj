@@ -56,12 +56,13 @@
      [:button "Add"]]))
 
 
-(defn- render-group
-  [plan-id {:keys [group tasks]}]
+(defn- render-group-header
+  "#plan-group-<id>-header: the group's title, its controls and an inline edit form."
+  [group]
   (let [id (:plan.group/id group)
         path (str "/plan-groups/" id)
         signal (toggle-signal "Group" id)]
-    [:section.plan-group (merge {:id (str "plan-group-" id)} (edit-toggle signal))
+    [:header (merge {:id (str "plan-group-" id "-header")} (edit-toggle signal))
      [:h2
       [:span.icon (:plan.group/icon group)]
       [:span.title (:plan.group/title group)]
@@ -74,19 +75,41 @@
                 (field "Title" "title" (:plan.group/title group) {:required true})
                 (field "Icon" "icon" (:plan.group/icon group) {:size 4})
                 (errors-el (str "plan-group-" id "-errors"))
-                [:button "Save"])
-     [:ul.plan-tasks (map #(vector render-plan-task %) tasks)]
+                [:button "Save"])]))
+
+
+(defn- plan-task-view
+  "#plan-task-<id>, re-rendered when the task's topic is touched; nothing once it's gone."
+  [{:chequer/keys [db live]} plan-id task-id]
+  @(live/cell live [:plan plan-id :task task-id])
+  (some-> (plans/load-plan-task db task-id) render-plan-task))
+
+
+(defn- task-list
+  [src plan-id task-ids]
+  [:ul.plan-tasks (map #(vector plan-task-view src plan-id %) task-ids)])
+
+
+(defn- render-group
+  "A group's section, rendered as a component. Its root has no id, so glimmer-datastar keeps the
+  parts inside it, the header and each task, patchable on their own."
+  [src plan-id {:keys [group task-ids]}]
+  (let [id (:plan.group/id group)]
+    [:section.plan-group
+     [render-group-header group]
+     (task-list src plan-id task-ids)
      [new-task-form plan-id id]]))
 
 
-(defn- render-loaded-plan
-  [{:keys [plan ungrouped groups]}]
-  (let [id (:plan/id plan)
+(defn- render-header
+  "#plan-<id>-header: the title, description, controls and an inline edit form."
+  [p]
+  (let [id (:plan/id p)
         path (str "/plans/" id)
         signal (toggle-signal "Plan" id)]
-    [:div.plan (merge {:id (str "plan-" id)} (edit-toggle signal))
-     [:h1 [:span.icon (:plan/icon plan)] [:span.title (:plan/title plan)]]
-     (when-let [d (:plan/description plan)]
+    [:header.plan-header (merge {:id (str "plan-" id "-header")} (edit-toggle signal))
+     [:h1 [:span.icon (:plan/icon p)] [:span.title (:plan/title p)]]
+     (when-let [d (:plan/description p)]
        [:div.markdown (raw (md/render d))])
      [:div.controls
       [:a.button.primary {:href (str "/lists/new?plan=" id)} "Start a list from this plan"]
@@ -94,25 +117,43 @@
       (edit-button signal)
       [:button.danger {:type "button" :data-on:click (confirmed "Delete this plan?" (str "@delete('" path "')"))} "Delete"]]
      (edit-form signal path
-                (field "Title" "title" (:plan/title plan) {:required true})
-                (field "Icon" "icon" (:plan/icon plan) {:size 4})
-                [:label "Description" [:textarea {:name "description" :rows 3} (or (:plan/description plan) "")]]
+                (field "Title" "title" (:plan/title p) {:required true})
+                (field "Icon" "icon" (:plan/icon p) {:size 4})
+                [:label "Description" [:textarea {:name "description" :rows 3} (or (:plan/description p) "")]]
                 (errors-el (str "plan-" id "-errors"))
-                [:button "Save"])
-     [:ul.plan-tasks (map #(vector render-plan-task %) ungrouped)]
-     [new-task-form id nil]
-     (map #(vector render-group id %) groups)
-     [:form.new-group {:data-on:submit (str (action "post" (str path "/groups")) "; el.reset()")}
-      (field [:span.visually-hidden "New group"] "title" nil {:required true :placeholder "Add a group"})
-      (errors-el (str "new-plan-group-" id "-errors"))
-      [:button "Add group"]]]))
+                [:button "Save"])]))
+
+
+(defn- header-view
+  "#plan-<id>-header, re-rendered when the plan's header topic is touched."
+  [{:chequer/keys [db live]} plan-id]
+  @(live/cell live [:plan plan-id :header])
+  (some-> (plans/load-plan-header db plan-id) render-header))
+
+
+(defn- plan-body
+  "The contents of #plan-<id>, re-rendered when the plan's structure topic is touched. The
+  header and each task are components reading topics of their own, so a change to one task
+  renders and sends only that task. A deleted plan sends the viewer to the index."
+  [{:chequer/keys [db live] :as src} plan-id]
+  @(live/cell live [:plan plan-id :structure])
+  (if-let [{:keys [ungrouped groups]} (plans/load-plan-structure db plan-id)]
+    (list [header-view src plan-id]
+          (task-list src plan-id ungrouped)
+          [new-task-form plan-id nil]
+          (map #(vector render-group src plan-id %) groups)
+          [:form.new-group {:data-on:submit (str (action "post" (str "/plans/" plan-id "/groups")) "; el.reset()")}
+           (field [:span.visually-hidden "New group"] "title" nil {:required true :placeholder "Add a group"})
+           (errors-el (str "new-plan-group-" plan-id "-errors"))
+           [:button "Add group"]])
+    (web/redirect-el "/plans")))
 
 
 (defn render-plan
-  "#plan-<id> as hiccup, or nil if the plan doesn't exist. viewer is unused until views
-  depend on the user or time zone."
-  [db plan-id _viewer]
-  (some-> (plans/load-plan db plan-id) render-loaded-plan))
+  "#plan-<id> as hiccup, reading the plan through src (see web/sources)."
+  [src plan-id]
+  [:div.plan {:id (str "plan-" plan-id)}
+   [plan-body src plan-id]])
 
 
 ;; ## Pages
@@ -150,16 +191,14 @@
   "GET /plans/:id. The page opens an SSE request to the same URL, which glimmer-datastar
   re-renders into #live whenever the plan's topic is touched; a deleted plan sends the
   viewer to the index."
-  [{:chequer/keys [db live user] :keys [params] :as req}]
+  [{:chequer/keys [db] :keys [params] :as req}]
   (let [id (:id params)
-        _ @(live/cell live [:plan id])
-        fragment (render-plan db id user)]
-    (cond
-      (:jolt.datastar/sse-request req) (html-response 200 (if fragment (html fragment) (web/redirect-script "/plans")))
-      fragment (html-response 200
-                              (layout/page req (:title (db/q1 db ["SELECT title FROM plan WHERE id = ?" id]))
-                                           [:div#live (ds/init-opts {:selector "#live"}) fragment]))
-      :else (text-response 404 "Not found"))))
+        fragment (render-plan (web/sources req) id)]
+    (if (:jolt.datastar/sse-request req)
+      (html-response 200 (html fragment))
+      (if-let [{:keys [title]} (db/q1 db ["SELECT title FROM plan WHERE id = ?" id])]
+        (html-response 200 (layout/page req title [:div#live (ds/init-opts {:selector "#live"}) fragment]))
+        (text-response 404 "Not found")))))
 
 
 ;; ## Mutations

@@ -649,7 +649,7 @@ progress::-moz-progress-bar {
 /* ## Lists and plans */
 
 .list-header,
-.plan > h1 {
+.plan-header > h1 {
   margin-bottom: 1rem;
 }
 
@@ -669,13 +669,13 @@ progress::-moz-progress-bar {
 }
 
 .list-header > .controls,
-.plan > .controls {
+.plan-header > .controls {
   margin: 0.75rem 0 1.5rem;
 }
 
 /* Line up a quiet first control's text with the content above it. */
 .list-header > .controls > :first-child:not(.primary),
-.plan > .controls > :first-child:not(.primary) {
+.plan-header > .controls > :first-child:not(.primary) {
   margin-left: -0.7rem;
 }
 

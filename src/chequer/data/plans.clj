@@ -170,6 +170,16 @@
 
 ;; ## Plans
 
+(defn- touch-plan!
+  "Touch the topic of plan pid, which every change to it touches, and of the parts given:
+  :header (the plan's row), :structure (its groups, and which tasks are in it and where) or
+  a task id (that task's row)."
+  [pid & parts]
+  (db/touch! [:plan pid])
+  (doseq [part parts]
+    (db/touch! (if (keyword? part) [:plan pid part] [:plan pid :task part]))))
+
+
 (defn create-plan!
   "Create a plan from {:title :description :icon} and return its id."
   [tx user attrs]
@@ -180,7 +190,7 @@
                                        :updated_at now :updated_by (:id user)))]
     (event/record! tx {:user user :entity-type "plan" :entity-id id :plan id
                        :action :create :data {:title (:title v)}})
-    (db/touch! [:plan id])
+    (touch-plan! id :header :structure)
     (db/touch! [:plans])
     id))
 
@@ -188,7 +198,7 @@
 (defn- update-entity!
   "Apply the validated attrs to row id of table, recording an :update event with the diff.
   Returns the changes. Writes nothing when no value changes."
-  [tx user {:keys [table schemas entity-type plan-id-of stamped?]} {:keys [id] :as attrs}]
+  [tx user {:keys [table schemas entity-type plan-id-of part-of stamped?]} {:keys [id] :as attrs}]
   (let [old (fetch-existing tx table id)
         v (clean schemas attrs)
         changes (event/diff old v (keys v))
@@ -198,7 +208,7 @@
                                  stamped? (assoc :updated_at (time/now-ms) :updated_by (:id user))))
       (event/record! tx {:user user :entity-type entity-type :entity-id id :plan pid
                          :action :update :data changes})
-      (db/touch! [:plan pid]))
+      (touch-plan! pid (part-of old)))
     changes))
 
 
@@ -206,7 +216,7 @@
   "Update the given keys of {:id :title :description :icon}."
   [tx user attrs]
   (when (seq (update-entity! tx user {:table "plan" :schemas plan-schemas :entity-type "plan"
-                                      :plan-id-of :id :stamped? true}
+                                      :plan-id-of :id :part-of (constantly :header) :stamped? true}
                              attrs))
     (db/touch! [:plans]))
   nil)
@@ -219,7 +229,7 @@
     (event/record! tx {:user user :entity-type "plan" :entity-id id :plan id
                        :action :delete :data {:title (:title old)}})
     (jdbc/execute! tx ["DELETE FROM plan WHERE id = ?" id])
-    (db/touch! [:plan id])
+    (touch-plan! id :header :structure)
     (db/touch! [:plans]))
   nil)
 
@@ -236,7 +246,7 @@
                                              :order (next-order tx "plan_group" ["plan_id = ?" plan-id])))]
     (event/record! tx {:user user :entity-type "plan.group" :entity-id id :plan plan-id
                        :action :create :data {:title (:title v)}})
-    (db/touch! [:plan plan-id])
+    (touch-plan! plan-id :structure)
     id))
 
 
@@ -244,7 +254,7 @@
   "Update the given keys of {:id :title :icon}."
   [tx user attrs]
   (update-entity! tx user {:table "plan_group" :schemas group-schemas :entity-type "plan.group"
-                           :plan-id-of :plan_id}
+                           :plan-id-of :plan_id :part-of (constantly :structure)}
                   attrs)
   nil)
 
@@ -259,7 +269,7 @@
     (event/record! tx {:user user :entity-type "plan.group" :entity-id id :plan pid
                        :action :delete :data {:title (:title old)}})
     (jdbc/execute! tx ["DELETE FROM plan_group WHERE id = ?" id])
-    (db/touch! [:plan pid]))
+    (touch-plan! pid :structure))
   nil)
 
 
@@ -269,7 +279,7 @@
     (when (order/move tx {:table table :scope-sql (scope-sql old) :id id :direction direction})
       (event/record! tx {:user user :entity-type entity-type :entity-id id :plan pid
                          :action :move :data {:direction direction}})
-      (db/touch! [:plan pid]))
+      (touch-plan! pid :structure))
     nil))
 
 
@@ -299,7 +309,7 @@
                               :updated_at now :updated_by (:id user)))]
     (event/record! tx {:user user :entity-type "plan.task" :entity-id id :plan plan-id
                        :action :create :data {:title (:title v)}})
-    (db/touch! [:plan plan-id])
+    (touch-plan! plan-id :structure)
     id))
 
 
@@ -307,7 +317,7 @@
   "Update the given keys of {:id :title :description :icon :estimate}."
   [tx user attrs]
   (update-entity! tx user {:table "plan_task" :schemas task-schemas :entity-type "plan.task"
-                           :plan-id-of :plan_id :stamped? true}
+                           :plan-id-of :plan_id :part-of :id :stamped? true}
                   attrs)
   nil)
 
@@ -319,7 +329,7 @@
     (event/record! tx {:user user :entity-type "plan.task" :entity-id id :plan pid
                        :action :delete :data {:title (:title old)}})
     (jdbc/execute! tx ["DELETE FROM plan_task WHERE id = ?" id])
-    (db/touch! [:plan pid]))
+    (touch-plan! pid :structure))
   nil)
 
 
@@ -337,6 +347,30 @@
   "All plans, ordered by title."
   [db]
   (mapv row->plan (db/q db ["SELECT * FROM plan ORDER BY title COLLATE NOCASE, id"])))
+
+
+(defn load-plan-task
+  "Plan task id, or nil."
+  [db id]
+  (some-> (db/q1 db ["SELECT * FROM plan_task WHERE id = ?" id]) row->task))
+
+
+(defn load-plan-header
+  "Plan id without its groups and tasks, or nil."
+  [db id]
+  (some-> (db/q1 db ["SELECT * FROM plan WHERE id = ?" id]) row->plan))
+
+
+(defn load-plan-structure
+  "{:ungrouped [task-id] :groups [{:group g :task-ids [...]}]} for plan id in display order,
+  or nil."
+  [db id]
+  (when (db/q1 db ["SELECT id FROM plan WHERE id = ?" id])
+    (let [groups (map row->group (db/q db ["SELECT * FROM plan_group WHERE plan_id = ? ORDER BY \"order\", id" id]))
+          task-ids (update-vals (group-by :group_id (db/q db ["SELECT id, group_id FROM plan_task WHERE plan_id = ? ORDER BY \"order\", id" id]))
+                                #(mapv :id %))]
+      {:ungrouped (get task-ids nil [])
+       :groups (mapv (fn [g] {:group g :task-ids (get task-ids (:plan.group/id g) [])}) groups)})))
 
 
 (defn load-plan

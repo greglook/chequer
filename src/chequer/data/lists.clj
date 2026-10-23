@@ -86,6 +86,16 @@
    :task/ended-by (:ended_by r)})
 
 
+(defn- touch-list!
+  "Touch the topic of list lid, which every change to it touches, and of the parts given:
+  :header (the list's row and task counts), :structure (its groups, and which tasks are in
+  it and where) or a task id (that task's row)."
+  [lid & parts]
+  (db/touch! [:list lid])
+  (doseq [part parts]
+    (db/touch! (if (keyword? part) [:list lid part] [:list lid :task part]))))
+
+
 (defn- record!
   [tx user entity-type id list-id action data]
   (event/record! tx {:user user :entity-type entity-type :entity-id id :list list-id
@@ -95,7 +105,7 @@
 (defn- update-entity!
   "Apply the validated attrs to row id of table, recording an :update event with the diff.
   Returns the changes. Writes nothing when no value changes."
-  [tx user {:keys [table schemas entity-type list-id-of stamped?]} {:keys [id] :as attrs}]
+  [tx user {:keys [table schemas entity-type list-id-of part-of stamped?]} {:keys [id] :as attrs}]
   (let [old (plans/fetch-existing tx table id)
         v (plans/clean schemas attrs)
         changes (event/diff old v (keys v))
@@ -104,7 +114,7 @@
       (plans/update-row! tx table id (cond-> (update-vals changes second)
                                        stamped? (assoc :updated_at (time/now-ms) :updated_by (:id user))))
       (record! tx user entity-type id lid :update changes)
-      (db/touch! [:list lid]))
+      (touch-list! lid (part-of old)))
     changes))
 
 
@@ -113,7 +123,7 @@
   (let [lid (:list_id old)]
     (when (order/move tx {:table table :scope-sql (scope-sql old) :id id :direction direction})
       (record! tx user entity-type id lid :move {:direction direction})
-      (db/touch! [:list lid]))
+      (touch-list! lid :structure))
     nil))
 
 
@@ -128,7 +138,7 @@
                                        :created_at now :created_by (:id user)
                                        :updated_at now :updated_by (:id user)))]
     (record! tx user "list" id id :create {:title (:title v)})
-    (db/touch! [:list id])
+    (touch-list! id :header :structure)
     (db/touch! [:lists])
     id))
 
@@ -137,7 +147,7 @@
   "Update the given keys of {:id :title :description :icon :due_at}."
   [tx user attrs]
   (when (seq (update-entity! tx user {:table "list" :schemas list-schemas :entity-type "list"
-                                      :list-id-of :id :stamped? true}
+                                      :list-id-of :id :part-of (constantly :header) :stamped? true}
                              attrs))
     (db/touch! [:lists]))
   nil)
@@ -149,7 +159,7 @@
   (when-let [old (plans/fetch-row tx "list" id)]
     (record! tx user "list" id id :delete {:title (:title old)})
     (jdbc/execute! tx ["DELETE FROM list WHERE id = ?" id])
-    (db/touch! [:list id])
+    (touch-list! id :header :structure)
     (db/touch! [:lists]))
   nil)
 
@@ -161,7 +171,7 @@
       (plans/update-row! tx "list" id {:archived_at archived-at
                                        :updated_at (time/now-ms) :updated_by (:id user)})
       (record! tx user "list" id id action nil)
-      (db/touch! [:list id])
+      (touch-list! id :header)
       (db/touch! [:lists]))
     nil))
 
@@ -191,7 +201,7 @@
                                              :source_id source-id
                                              :order (plans/next-order tx "list_group" ["list_id = ?" list-id])))]
     (record! tx user "list.group" id list-id :create {:title (:title v)})
-    (db/touch! [:list list-id])
+    (touch-list! list-id :structure)
     id))
 
 
@@ -199,7 +209,7 @@
   "Update the given keys of {:id :title :icon}."
   [tx user attrs]
   (update-entity! tx user {:table "list_group" :schemas group-schemas :entity-type "list.group"
-                           :list-id-of :list_id}
+                           :list-id-of :list_id :part-of (constantly :structure)}
                   attrs)
   nil)
 
@@ -212,7 +222,7 @@
       (record! tx user "task" (:id t) lid :delete {:title (:title t)}))
     (record! tx user "list.group" id lid :delete {:title (:title old)})
     (jdbc/execute! tx ["DELETE FROM list_group WHERE id = ?" id])
-    (db/touch! [:list lid]))
+    (touch-list! lid :header :structure))
   nil)
 
 
@@ -243,7 +253,7 @@
                               :created_at now :created_by (:id user)
                               :updated_at now :updated_by (:id user)))]
     (record! tx user "task" id list-id :create {:title (:title v)})
-    (db/touch! [:list list-id])
+    (touch-list! list-id :header :structure)
     id))
 
 
@@ -251,7 +261,7 @@
   "Update the given keys of {:id :title :description :icon :estimate :due_at :assignee_id}."
   [tx user attrs]
   (update-entity! tx user {:table "task" :schemas task-schemas :entity-type "task"
-                           :list-id-of :list_id :stamped? true}
+                           :list-id-of :list_id :part-of :id :stamped? true}
                   attrs)
   nil)
 
@@ -262,7 +272,7 @@
   (when-let [{lid :list_id :as old} (plans/fetch-row tx "task" id)]
     (record! tx user "task" id lid :delete {:title (:title old)})
     (jdbc/execute! tx ["DELETE FROM task WHERE id = ?" id])
-    (db/touch! [:list lid]))
+    (touch-list! lid :header :structure))
   nil)
 
 
@@ -298,7 +308,7 @@
                                              :updated_at (time/now-ms) :updated_by (:id user)))
       (record! tx user "task" id lid (case state :completed :complete :abandoned :abandon :update)
                {:state [old-state (name state)]})
-      (db/touch! [:list lid]))
+      (touch-list! lid :header id))
     nil))
 
 
@@ -322,6 +332,34 @@
 
 
 ;; ## Reads
+
+(defn load-task
+  "Task id, or nil."
+  [db id]
+  (some-> (db/q1 db ["SELECT * FROM task WHERE id = ?" id]) row->task))
+
+
+(defn load-list-header
+  "{:list l :counts {state n}} for list id, or nil."
+  [db id]
+  (when-let [l (db/q1 db ["SELECT * FROM list WHERE id = ?" id])]
+    {:list (row->list l)
+     :counts (into (zipmap states (repeat 0))
+                   (map (juxt (comp keyword :state) :n))
+                   (db/q db ["SELECT state, count(*) AS n FROM task WHERE list_id = ? GROUP BY state" id]))}))
+
+
+(defn load-list-structure
+  "{:ungrouped [task-id] :groups [{:group g :task-ids [...]}]} for list id in display order,
+  or nil."
+  [db id]
+  (when (db/q1 db ["SELECT id FROM list WHERE id = ?" id])
+    (let [groups (map row->group (db/q db ["SELECT * FROM list_group WHERE list_id = ? ORDER BY \"order\", id" id]))
+          task-ids (update-vals (group-by :group_id (db/q db ["SELECT id, group_id FROM task WHERE list_id = ? ORDER BY \"order\", id" id]))
+                                #(mapv :id %))]
+      {:ungrouped (get task-ids nil [])
+       :groups (mapv (fn [g] {:group g :task-ids (get task-ids (:list.group/id g) [])}) groups)})))
+
 
 (defn load-list
   "{:list l :ungrouped [tasks] :groups [{:group g :tasks [...]}]} in display order, or nil."

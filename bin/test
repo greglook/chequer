@@ -5,4 +5,12 @@ set -e
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-exec jolt -M:test -m cognitect.test-runner "$@"
+# Slow tests tagged ^:load are skipped unless the arguments choose what to include.
+exclude=(-e :load)
+for arg in "$@"; do
+  case "$arg" in
+    -i|--include|-i*|--include=*) exclude=() ;;
+  esac
+done
+
+exec jolt -M:test -m cognitect.test-runner "${exclude[@]}" "$@"

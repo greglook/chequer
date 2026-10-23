@@ -47,6 +47,13 @@ bin/test -n chequer.auth-test
 bin/test -v chequer.auth-test/single-mode-resolves-the-owner
 ```
 
+Slow tests tagged `^:load` are skipped unless the arguments choose what to include. The load test opens 50
+SSE streams against a real server and checks every stream sees every update:
+
+```sh
+bin/test -i :load
+```
+
 ## Code style
 
 Validate code style with `cljstyle`:

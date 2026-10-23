@@ -47,7 +47,9 @@
     (fn [h]
       (let [r (get-uri h "/healthz")]
         (is (= 200 (:status r)))
-        (is (= "ok" (:body r)))))))
+        (is (str/starts-with? (:body r) "ok\n"))
+        (is (str/includes? (:body r) "\nstreams=0\n"))
+        (is (re-find #"\ncache .*hits=\d+" (:body r)))))))
 
 
 (deftest healthz-rejects-other-methods

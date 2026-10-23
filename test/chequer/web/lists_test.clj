@@ -10,6 +10,7 @@
     [chequer.time :as time]
     [clojure.core.async :as async]
     [clojure.data.json :as json]
+    [clojure.set :as set]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]])
   (:import
@@ -111,7 +112,7 @@
           (is (str/includes? body "id=\"live\""))
           (is (str/includes? body (str "id=\"list-" lid "\"")))
           (is (str/includes? body (str "id=\"list-" lid "-header\"")))
-          (is (str/includes? body (str "id=\"list-group-" g "\"")))
+          (is (str/includes? body (str "id=\"list-group-" g "-header\"")))
           (is (str/includes? body "data-task-count=\"2\"") "deleting the group confirms with its task count")
           (is (str/includes? body "0 of 3 done"))
           (is (< (str/index-of body "Passport") (str/index-of body "Clothes")) "ungrouped tasks come first"))
@@ -152,6 +153,42 @@
               (is (str/includes? frame "window.location.href = \"/\""))))
           (finally
             (async/close! ch)))))))
+
+
+(defn- part-ids
+  "The ids of the parts a patch frame replaces."
+  [frame]
+  (set (map second (re-seq #"id=\"(task-\d+|list-\d+-header|list-group-\d+-header)\"" frame))))
+
+
+(deftest a-state-change-sends-exactly-the-task-and-the-header
+  (with-app
+    (fn [h sys]
+      (let [lid (create-list! h "Trip")
+            _ (request h :post (str "/lists/" lid "/tasks") {:signals {:title "Passport"}})
+            _ (request h :post (str "/lists/" lid "/groups") {:signals {:title "Clothes"}})
+            gid (:id (db/q1 (:db sys) ["SELECT id FROM list_group"]))
+            _ (request h :post (str "/lists/" lid "/tasks") {:signals {:title "Socks" :group (str gid)}})
+            _ (request h :post (str "/lists/" lid "/tasks") {:signals {:title "Shirts" :group (str gid)}})
+            [_ socks shirts] (task-ids sys)
+            streams (repeatedly 2 #(:body (request h :get (str "/lists/" lid "?datastar-sse=true&datastar-selector=%23live"))))]
+        (try
+          (doseq [ch streams]
+            (is (set/subset? #{(str "task-" socks) (str "task-" shirts) (str "list-" lid "-header") (str "list-group-" gid "-header")}
+                             (part-ids (take-frame ch)))
+                "the first frame is the whole list"))
+          (is (ok? (request h :post (str "/tasks/" socks "/state?to=completed"))))
+          (doseq [ch streams]
+            (let [frame (take-frame ch)]
+              (is (str/includes? frame "data: mode outer"))
+              (is (not (str/includes? frame "data: selector")) "parts are replaced by id")
+              (is (= #{(str "task-" socks) (str "list-" lid "-header")} (part-ids frame)))))
+          (testing "renaming a task sends only the task"
+            (is (ok? (request h :put (str "/tasks/" shirts) {:signals {:title "Shirts x3"}})))
+            (doseq [ch streams]
+              (is (= #{(str "task-" shirts)} (part-ids (take-frame ch))))))
+          (finally
+            (run! async/close! streams)))))))
 
 
 (deftest task-states-and-moves
@@ -228,10 +265,10 @@
               (let [frame (take-frame ch)]
                 (is (str/includes? frame "Mine"))
                 (is (not (str/includes? frame "Theirs"))))
-              (db/with-tx [tx (:db sys)]
-                (lists/create-task! tx other {:list-id lid :title "Also theirs" :assignee_id (:id other)})
-                (lists/create-task! tx other {:list-id lid :title "Mine too" :assignee_id (:id me)}))
-              (live/touch! (:live sys) [[:list lid]])
+              (live/touch! (:live sys)
+                           (:topics (db/with-tx [tx (:db sys)]
+                                      (lists/create-task! tx other {:list-id lid :title "Also theirs" :assignee_id (:id other)})
+                                      (lists/create-task! tx other {:list-id lid :title "Mine too" :assignee_id (:id me)}))))
               (let [frame (take-frame ch)]
                 (is (str/includes? frame "Mine too"))
                 (is (not (str/includes? frame "Also theirs"))))

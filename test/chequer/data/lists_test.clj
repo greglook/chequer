@@ -70,7 +70,7 @@
     (fn [d u]
       (let [{:keys [lid a]} (seed d u)
             before (count (events d))]
-        (is (= #{[:list lid]} (:topics (tx! d #(lists/set-state! % u {:id a :state :completed})))))
+        (is (= #{[:list lid] [:list lid :header] [:list lid :task a]} (:topics (tx! d #(lists/set-state! % u {:id a :state :completed})))))
         (is (= {:state "completed" :started_at 1000 :ended_at 1000 :ended_by (:id u)}
                (select-keys (db/q1 d ["SELECT * FROM task WHERE id = ?" a]) [:state :started_at :ended_at :ended_by])))
         (testing "undo back to pending"
@@ -116,13 +116,13 @@
   (with-user
     (fn [d u]
       (let [{lid :result topics :topics} (tx! d #(lists/create-list! % u {:title " Trip " :description "" :icon "🧳" :due_at 5000}))]
-        (is (= #{[:list lid] [:lists]} topics))
+        (is (= #{[:list lid] [:list lid :header] [:list lid :structure] [:lists]} topics))
         (is (= {:list/id lid :list/title "Trip" :list/description nil :list/icon "🧳" :list/due-at 5000
                 :list/archived-at nil :list/created-at 1000 :list/created-by (:id u)
                 :list/updated-at 1000 :list/updated-by (:id u)}
                (:list (lists/load-list d lid))))
         (binding [time/*now-ms* (constantly 2000)]
-          (is (= #{[:list lid] [:lists]} (:topics (tx! d #(lists/update-list! % u {:id lid :title "Trip!" :due_at nil}))))))
+          (is (= #{[:list lid] [:list lid :header] [:lists]} (:topics (tx! d #(lists/update-list! % u {:id lid :title "Trip!" :due_at nil}))))))
         (is (= {:list/title "Trip!" :list/due-at nil :list/updated-at 2000}
                (select-keys (:list (lists/load-list d lid)) [:list/title :list/due-at :list/updated-at])))
         (testing "an update that changes nothing writes no event and no topics"
@@ -151,7 +151,7 @@
     (fn [d u]
       (let [{:keys [lid]} (seed d u)
             archived-at #(:list/archived-at (:list (lists/load-list d lid)))]
-        (is (= #{[:list lid] [:lists]} (:topics (tx! d #(lists/archive-list! % u {:id lid})))))
+        (is (= #{[:list lid] [:list lid :header] [:lists]} (:topics (tx! d #(lists/archive-list! % u {:id lid})))))
         (is (= 1000 (archived-at)))
         (testing "archiving twice keeps the first instant and writes nothing"
           (binding [time/*now-ms* (constantly 2000)]
@@ -187,7 +187,7 @@
             g2 (:result (tx! d #(lists/create-group! % u {:list-id lid :title "G2"})))
             d2 (:result (tx! d #(lists/create-task! % u {:list-id lid :group-id g2 :title "d"})))
             before (count (events d))]
-        (is (= #{[:list lid]} (:topics (tx! d #(lists/move-group! % u {:id g2 :direction :up})))))
+        (is (= #{[:list lid] [:list lid :structure]} (:topics (tx! d #(lists/move-group! % u {:id g2 :direction :up})))))
         (tx! d #(lists/move-task! % u {:id b :direction :up}))
         (tx! d #(lists/move-task! % u {:id d2 :direction :down}))
         (is (= [["c"] [["G2" ["d"]] ["G1" ["b" "a"]]]] (shape (lists/load-list d lid))))
@@ -202,7 +202,7 @@
     (fn [d u]
       (let [{:keys [lid g1 a]} (seed d u)
             before (count (events d))]
-        (is (= #{[:list lid]} (:topics (tx! d #(lists/update-group! % u {:id g1 :title "Clothes" :icon "👕"})))))
+        (is (= #{[:list lid] [:list lid :structure]} (:topics (tx! d #(lists/update-group! % u {:id g1 :title "Clothes" :icon "👕"})))))
         (tx! d #(lists/update-task! % u {:id a :title "a2" :estimate "5" :due_at 9000 :assignee_id (:id u)}))
         (is (= [{:entity_type "list.group" :entity_id g1 :list_id lid :action "update"
                  :data {:title ["G1" "Clothes"] :icon [nil "👕"]}}
@@ -216,7 +216,7 @@
     (fn [d u]
       (let [{:keys [lid g1 a b]} (seed d u)
             before (count (events d))]
-        (is (= #{[:list lid]} (:topics (tx! d #(lists/delete-group! % u {:id g1})))))
+        (is (= #{[:list lid] [:list lid :header] [:list lid :structure]} (:topics (tx! d #(lists/delete-group! % u {:id g1})))))
         (is (= [["c"] []] (shape (lists/load-list d lid))))
         (is (= [{:entity_type "task" :entity_id a :list_id lid :action "delete" :data {:title "a"}}
                 {:entity_type "task" :entity_id b :list_id lid :action "delete" :data {:title "b"}}

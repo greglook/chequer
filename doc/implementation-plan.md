@@ -33,7 +33,9 @@ These conventions apply to every phase.
 - After commit, `live/wrap-touch` bumps each touched topic's revision ratom. glimmer-datastar re-renders every
   open page whose SSE render dereffed one of them (the actor's own included) on its next tick, and pushes the
   fragment when its HTML changed.
-- Fragments have stable ids: `plan-7`, `plan-group-3`, `plan-task-42`, `list-9`, `list-group-5`, `task-88`.
+- Fragments have stable ids: `plan-7`, `plan-7-header`, `plan-group-3-header`, `plan-task-42`, `list-9`,
+  `list-9-header`, `list-group-5-header`, `task-88`. A group's `<section>` has no id: it is a component, and an
+  id on its root would make glimmer-datastar patch the whole group instead of the parts inside it.
 - Validation errors come back directly as a `datastar-patch-elements` SSE response that targets the form's
   error element. The status is still 200, because Datastar applies SSE responses.
 

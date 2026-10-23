@@ -80,7 +80,7 @@
             lid (make-list! d u)
             {:keys [result topics]} (add! d u lid pid)]
         (is (= [{:plan-id pid :plan-title "Packing" :groups-created 2 :tasks-created 5 :tasks-skipped 0}] result))
-        (is (= #{[:list lid] [:lists]} topics))
+        (is (= #{[:list lid] [:list lid :header] [:list lid :structure] [:lists]} topics))
         (is (= [["Passport" "Charger"] [["Clothes" ["Socks" "Shirts"]] ["Toiletries" ["Toothbrush"]]]]
                (shape d lid)))
         (let [loaded (lists/load-list d lid)
