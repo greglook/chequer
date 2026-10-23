@@ -4,7 +4,9 @@
     [chequer.auth :as auth]
     [chequer.db :as db]
     [chequer.live :as live]
+    [chequer.oidc :as oidc]
     [chequer.router :as router]
+    [chequer.sessions :as sessions]
     [chequer.web.history :as history]
     [chequer.web.lists :as lists]
     [chequer.web.plans :as plans]
@@ -36,6 +38,7 @@
   (vec (concat [[:get ["healthz"] healthz]]
                history/routes
                lists/routes
+               oidc/routes
                plans/routes
                search/routes)))
 
@@ -67,22 +70,35 @@
         (handler req)))))
 
 
-(defn wrap-system
-  "Put the database, config and live state on each request as :chequer/db, :chequer/cfg
-  and :chequer/live."
-  [handler {:keys [db cfg live]}]
+(defn wrap-header-vectors
+  "Turn sequential response header values, such as the Set-Cookie list wrap-cookies makes,
+  into vectors: the adapter writes one header line per element only for a vector."
+  [handler]
   (fn [req]
-    (handler (assoc req :chequer/db db :chequer/cfg cfg :chequer/live live))))
+    (let [resp (handler req)]
+      (cond-> resp
+        (some (comp seq? val) (:headers resp))
+        (update :headers update-vals #(if (seq? %) (vec %) %))))))
+
+
+(defn wrap-system
+  "Put the database, config, live state and OIDC provider (in OIDC mode) on each request as
+  :chequer/db, :chequer/cfg, :chequer/live and :chequer/oidc."
+  [handler {:keys [db cfg live oidc]}]
+  (fn [req]
+    (handler (assoc req :chequer/db db :chequer/cfg cfg :chequer/live live :chequer/oidc oidc))))
 
 
 (defn handler
-  "The application's ring handler for the running system sys ({:db .. :cfg .. :live ..})."
+  "The application's ring handler for the running system sys ({:db .. :cfg .. :live ..},
+  plus :oidc in OIDC mode)."
   [{:keys [cfg live] :as sys}]
   (-> (router/handler routes)
       (live/wrap-touch live)
       (auth/wrap-auth (:auth cfg))
       (auth/wrap-origin-check)
       (wrap-cookies)
+      (wrap-header-vectors)
       (wrap-params)
       (wrap-static)
       (wrap-not-modified)
@@ -111,16 +127,20 @@
 
 (defn start!
   "Open and migrate the database, then start the HTTP server. Returns
-  {:server .. :db .. :cfg .. :live ..}."
+  {:server .. :db .. :cfg .. :live ..}, plus the :oidc provider and the expired-session
+  :sweeper in OIDC mode."
   [cfg]
   (let [db (db/open (get-in cfg [:database :path]))]
     (try
       (db/migrate! db)
       (let [{:keys [host port]} (get-in cfg [:server :listen])
-            sys {:db db :cfg cfg :live (live/live)}
+            oidc? (= :oidc (get-in cfg [:auth :mode]))
+            sys (cond-> {:db db :cfg cfg :live (live/live)}
+                  oidc? (assoc :oidc (oidc/provider cfg)))
             server (adapter/run-server (wrap-request-log (handler sys))
                                        {:host host :port port :strategy :fibers})]
-        (assoc sys :server server))
+        (cond-> (assoc sys :server server)
+          oidc? (assoc :sweeper (sessions/start-sweeper! db))))
       (catch Exception e
         (db/close! db)
         (throw e)))))
@@ -128,7 +148,9 @@
 
 (defn stop!
   "Stop the HTTP server and close the database of a system returned by start!."
-  [{:keys [server db live]}]
+  [{:keys [server db live sweeper]}]
   (adapter/stop-server server)
+  (when sweeper
+    (sessions/stop-sweeper! sweeper))
   (live/stop! live)
   (db/close! db))

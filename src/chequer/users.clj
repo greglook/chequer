@@ -48,6 +48,12 @@
           (by-id tx id))))))
 
 
+(defn find-user
+  "The user row with id, or nil."
+  [db id]
+  (db/q1 db ["SELECT * FROM user WHERE id = ?" id]))
+
+
 (defn list-users
   "Every user as {:id :name :title}, ordered by title."
   [db]

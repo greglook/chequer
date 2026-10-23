@@ -714,9 +714,10 @@ Create `src/chequer/oidc.clj` and `test/chequer/oidc_test.clj`; add the `:oidc` 
 
 `GET /auth/login`:
 - Generates `state`, `nonce` and a PKCE verifier, and computes the S256 challenge.
-- Stores them in a short-lived signed cookie (HMAC with a server key generated
-  at first start and kept in a `setting` table that migration 005 creates),
-  valid for 10 minutes.
+- Stores them in a short-lived signed cookie (HMAC with the `cookie-key` from
+  the `[auth.oidc]` config section, at least 32 bytes as hex), valid for 10
+  minutes. In oidc mode a missing or invalid key stops startup with an error
+  explaining how to generate one with `openssl rand -hex 32`.
 - Redirects to the authorization endpoint.
 
 `GET /auth/callback`:
@@ -829,7 +830,7 @@ Create `README.md` and `doc/operations.md`.
   config path comes from `--config`, then `CHEQUER_CONFIG`, then
   `chequer.ini`.
 - Migrations are numbered and compiled into the binary: 001 users and events,
-  002 plans, 003 lists, 004 search, 005 sessions and settings. Each upgrade
+  002 plans, 003 lists, 004 search, 005 sessions. Each upgrade
   first writes a backup with `VACUUM INTO`.
 - Events are never foreign keys, and deletes are hard. A `:delete` event stores
   the entity's final title. • The markdown renderer is vendored from the

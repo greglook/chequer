@@ -171,7 +171,9 @@
     (fn [d path]
       (db/migrate! d)
       (is (= latest (user-version d)))
-      (is (= #{"user" "event" "plan" "plan_group" "plan_task" "list" "list_group" "task" "search"} (table-names d)))
+      (is (= #{"user" "event" "plan" "plan_group" "plan_task" "list" "list_group" "task" "search"
+               "session"}
+             (table-names d)))
       (is (not (.exists (io/file (str path ".pre-v" latest ".bak"))))
           "an empty database needs no backup"))))
 

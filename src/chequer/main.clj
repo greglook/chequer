@@ -79,7 +79,10 @@
   "Start the server and run until interrupted."
   [cfg]
   (let [{:keys [host port]} (get-in cfg [:server :listen])
-        sys (core/start! cfg)]
+        sys (try
+              (core/start! cfg)
+              (catch Exception e
+                (fail (str "Cannot start server: " (ex-message e)))))]
     (log/info (str "Chequer listening on " host ":" port))
     (host/block-sigint)
     (host/park-until-interrupt)

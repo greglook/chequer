@@ -90,6 +90,9 @@ function toggleTheme() {
              [:a.brand {:href "/"} "Chequer"]
              [:div.links (map #(nav-link (:uri req) %) sections)]
              [:span.user (get-in req [:chequer/user :title])]
+             (when (:chequer/session req)
+               [:form.sign-out {:method "post" :action "/auth/logout"}
+                [:button {:type "submit"} "Sign out"]])
              [:button.theme-toggle {:type "button" :onclick "toggleTheme()"
                                     :title "Toggle dark mode" :aria-label "Toggle dark mode"}
               theme-icons]]]

@@ -1,11 +1,15 @@
 (ns chequer.auth
   "Authentication modes and the middleware that ties each request to a user."
   (:require
+    [chequer.live :as live]
+    [chequer.sessions :as sessions]
+    [chequer.time :as time]
     [chequer.users :as users]
     [clojure.string :as str])
   (:import
     (java.net
-      InetAddress)))
+      InetAddress
+      URLEncoder)))
 
 
 (def ^:private ip-literal-re
@@ -94,6 +98,42 @@
         (forbidden)))))
 
 
+(defn- unauthenticated
+  "The response to a request without a valid session: a page load is sent to log in and
+  come back; anything else, such as an SSE render or a Datastar action, gets a 401."
+  [{:keys [request-method uri query-string headers] :as req}]
+  (if (and (#{:get :head} request-method)
+           (not (:jolt.datastar/sse-request req))
+           (not (get headers "datastar-request")))
+    {:status 302
+     :headers {"Location" (str "/auth/login?next="
+                               (URLEncoder/encode (cond-> uri query-string (str "?" query-string)) "UTF-8"))}}
+    {:status 401
+     :headers {"Content-Type" "text/plain; charset=utf-8"}
+     :body "Unauthorized"}))
+
+
+(defn- oidc-mode
+  "Middleware resolving the user from the session cookie. The login pages under /auth/ need
+  no session. A request with a live session derefs the session's cell, so logging out
+  re-renders the session's open streams at once, and their renders, failing auth, end
+  them."
+  [handler]
+  (fn wrapper
+    [{:chequer/keys [db live] :keys [uri cookies] :as req}]
+    (if (str/starts-with? uri "/auth/")
+      (handler req)
+      (let [session (sessions/lookup db (get-in cookies [sessions/cookie-name :value]) (time/now-ms))
+            user (some->> session :session/user (users/find-user db))]
+        (if user
+          (do (when live
+                @(live/cell live [:session (:session/id session)]))
+              (handler (assoc req
+                              :chequer/user (users/touch-last-seen! db user)
+                              :chequer/session session)))
+          (unauthenticated req))))))
+
+
 (defn wrap-auth
   "Middleware putting the current user on the request as :chequer/user, according to the
   configured auth mode. Expects :chequer/db and :chequer/cfg on the request."
@@ -105,6 +145,9 @@
 
                   :proxy
                   (proxy-mode handler)
+
+                  :oidc
+                  (oidc-mode handler)
 
                   ;; else
                   (throw (ex-info (str "Unknown authentication mode: " (pr-str auth-mode))

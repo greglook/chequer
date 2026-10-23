@@ -44,6 +44,7 @@ header=X-Remote-User
                  :oidc {:issuer nil
                         :client-id nil
                         :client-secret nil
+                        :cookie-key nil
                         :scopes "openid profile email"
                         :session-ttl-ms 1209600000}}}
          (config/normalize {}))))

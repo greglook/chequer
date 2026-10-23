@@ -241,6 +241,26 @@ nav .user {
   min-width: 0;
 }
 
+nav .sign-out {
+  flex: none;
+  margin: 0;
+}
+
+/* A plain nav control, though it submits a form: specific enough to outrank the accent
+   that submit buttons get. */
+header.site nav form.sign-out button {
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: normal;
+}
+
+header.site nav form.sign-out button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
 .theme-toggle {
   flex: none;
   width: 2.25rem;
