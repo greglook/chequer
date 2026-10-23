@@ -998,6 +998,63 @@ fieldset.plan-picker legend {
 }
 
 
+/* ## Search */
+
+main > form.search {
+  display: flex;
+  gap: 0.5rem;
+  max-width: none;
+  margin-bottom: 1.25rem;
+}
+
+form.search label {
+  flex: 1;
+}
+
+main > form.search > button {
+  min-height: auto;
+}
+
+ol.results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.result {
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.result:last-child {
+  border-bottom: none;
+}
+
+.result > a {
+  font-weight: 550;
+}
+
+.result .kind,
+.result .owner {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.result .snippet {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.result mark {
+  background: var(--accent-soft);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 0.1em;
+}
+
+
 /* ## Markdown */
 
 .markdown {

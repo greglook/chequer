@@ -8,6 +8,7 @@
     [chequer.web.history :as history]
     [chequer.web.lists :as lists]
     [chequer.web.plans :as plans]
+    [chequer.web.search :as search]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.tools.logging :as log]
@@ -35,7 +36,8 @@
   (vec (concat [[:get ["healthz"] healthz]]
                history/routes
                lists/routes
-               plans/routes)))
+               plans/routes
+               search/routes)))
 
 
 (def ^:private static-content-types

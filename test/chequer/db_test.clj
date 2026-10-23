@@ -3,6 +3,7 @@
     [chequer.db :as db]
     [chequer.test-helpers :as helpers]
     [clojure.java.io :as io]
+    [clojure.string :as str]
     [clojure.test :refer [deftest is]]
     [jdbc.core :as jdbc]
     [tick.core :as t]))
@@ -121,8 +122,12 @@
 
 
 (defn- table-names
+  "The tables in d, leaving out SQLite's own and the search index's shadow tables."
   [d]
-  (set (map :name (db/q d ["SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"]))))
+  (->> (db/q d ["SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"])
+       (map :name)
+       (remove #(str/starts-with? % "search_"))
+       (set)))
 
 
 (def ^:private latest
@@ -166,7 +171,7 @@
     (fn [d path]
       (db/migrate! d)
       (is (= latest (user-version d)))
-      (is (= #{"user" "event" "plan" "plan_group" "plan_task" "list" "list_group" "task"} (table-names d)))
+      (is (= #{"user" "event" "plan" "plan_group" "plan_task" "list" "list_group" "task" "search"} (table-names d)))
       (is (not (.exists (io/file (str path ".pre-v" latest ".bak"))))
           "an empty database needs no backup"))))
 
