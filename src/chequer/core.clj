@@ -132,7 +132,8 @@
   [cfg]
   (let [db (db/open (get-in cfg [:database :path]))]
     (try
-      (db/migrate! db)
+      (doseq [{:keys [file]} (db/migrate! db)]
+        (log/info (str "Applied migration " file)))
       (let [{:keys [host port]} (get-in cfg [:server :listen])
             oidc? (= :oidc (get-in cfg [:auth :mode]))
             sys (cond-> {:db db :cfg cfg :live (live/live)}

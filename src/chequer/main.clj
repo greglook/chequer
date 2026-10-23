@@ -76,17 +76,22 @@
 
 
 (defn- run-server
-  "Start the server and run until interrupted."
+  "Start the server and run until interrupted. The process exits on SIGINT or SIGTERM
+  without returning from the park, so the system is stopped by a shutdown hook."
   [cfg]
   (let [{:keys [host port]} (get-in cfg [:server :listen])
         sys (try
               (core/start! cfg)
               (catch Exception e
                 (fail (str "Cannot start server: " (ex-message e)))))]
+    (host/add-shutdown-hook
+      (fn stop-system
+        []
+        (log/info "Chequer shutting down")
+        (core/stop! sys)))
     (log/info (str "Chequer listening on " host ":" port))
     (host/block-sigint)
-    (host/park-until-interrupt)
-    (core/stop! sys)))
+    (host/park-until-interrupt)))
 
 
 (defn- run-migrate

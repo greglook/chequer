@@ -1,0 +1,5 @@
+*
+!bin/
+!deps.edn
+!resources/
+!src/

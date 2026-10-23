@@ -90,3 +90,12 @@ bin/build release
 # remove build files
 bin/build clean
 ```
+
+The binary is written to `target/release/chequer`. Static assets and migrations are embedded in it, so it
+runs from any directory. To build the container image instead:
+
+```sh
+podman build --format docker -t chequer .
+```
+
+See [operations.md](operations.md) for running and configuring either one.
