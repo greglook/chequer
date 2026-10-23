@@ -5,6 +5,7 @@
     [chequer.db :as db]
     [chequer.live :as live]
     [chequer.router :as router]
+    [chequer.web.history :as history]
     [chequer.web.lists :as lists]
     [chequer.web.plans :as plans]
     [clojure.java.io :as io]
@@ -28,6 +29,7 @@
 (def ^:private routes
   "Application routes as [method path-pattern handler]."
   (vec (concat [[:get ["healthz"] healthz]]
+               history/routes
                lists/routes
                plans/routes)))
 

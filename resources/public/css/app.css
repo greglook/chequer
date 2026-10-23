@@ -100,3 +100,23 @@ details.menu {
   padding: 0.25rem 0.5rem;
   border-radius: 0.25rem;
 }
+
+.history {
+  padding-left: 0;
+  list-style: none;
+}
+
+.history li {
+  padding: 0.25rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.history time,
+.history .task-history {
+  color: #555;
+  font-size: 0.875rem;
+}
+
+.history time {
+  margin-right: 0.5rem;
+}

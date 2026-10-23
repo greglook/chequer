@@ -116,7 +116,8 @@
         [:summary "State"]
         (for [s [:working :abandoned :pending]
               :when (not= s state)]
-          [:button {:type "button" :data-on:click (str "@post('" (state-url id s) "')")} (state-actions s)])]
+          [:button {:type "button" :data-on:click (str "@post('" (state-url id s) "')")} (state-actions s)])
+        [:a {:href (str path "/history")} "History"]]
        (edit-button signal)
        (move-buttons path)
        [:button {:type "button" :data-on:click (web/confirmed "Delete this task?" (str "@delete('" path "')"))} "Delete"]]]
@@ -210,6 +211,7 @@
       (if (:mine? v)
         [:a.toggle.on {:href path} "Assigned to me"]
         [:a.toggle {:href (str path "?mine=1")} "Assigned to me"])
+      [:a {:href (str path "/history")} "History"]
       (edit-button signal)
       (if archived?
         [:button {:type "button" :data-on:click (str "@post('" path "/unarchive')")} "Unarchive"]
