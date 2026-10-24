@@ -5,8 +5,10 @@
     [chequer.db :as db]
     [chequer.live :as live]
     [chequer.markdown :as md]
-    [chequer.web.common :as web :refer [action confirmed edit-button edit-form edit-toggle errors-el field
-                                        html html-response move-buttons mutate raw text-response toggle-signal]]
+    [chequer.web.common :as web :refer [action confirmed delete-icon-button delete-menu-item
+                                        edit-button edit-form edit-icon-button edit-toggle errors-el
+                                        field html html-response more-menu move-buttons mutate raw
+                                        text-response toggle-signal]]
     [chequer.web.layout :as layout]
     [jolt.datastar.core :as ds]))
 
@@ -35,9 +37,9 @@
       [:span.title (:plan.task/title t)]
       (when-let [e (:plan.task/estimate t)] [:span.estimate (str e " min")])
       [:span.controls
-       (edit-button signal)
+       (edit-icon-button signal)
        (move-buttons path)
-       [:button.danger {:type "button" :data-on:click (confirmed "Delete this task?" (str "@delete('" path "')"))} "Delete"]]]
+       (more-menu (delete-menu-item "Delete this task?" path))]]
      (when-let [d (:plan.task/description t)]
        [:details [:summary "Description"] [:div.markdown (raw (md/render d))]])
      (edit-form signal path
@@ -67,10 +69,9 @@
       [:span.icon (:plan.group/icon group)]
       [:span.title (:plan.group/title group)]
       [:span.controls
-       (edit-button signal)
+       (edit-icon-button signal)
        (move-buttons path)
-       [:button.danger {:type "button" :data-on:click (confirmed "Delete this group and its tasks?" (str "@delete('" path "')"))}
-        "Delete"]]]
+       (delete-icon-button (confirmed "Delete this group and its tasks?" (str "@delete('" path "')")))]]
      (edit-form signal path
                 (field "Title" "title" (:plan.group/title group) {:required true})
                 (field "Icon" "icon" (:plan.group/icon group) {:size 4})

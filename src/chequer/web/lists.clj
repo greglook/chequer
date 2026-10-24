@@ -9,8 +9,10 @@
     [chequer.markdown :as md]
     [chequer.time :as time]
     [chequer.users :as users]
-    [chequer.web.common :as web :refer [action edit-button edit-form edit-toggle errors-el field html
-                                        html-response move-buttons mutate raw text-response toggle-signal]]
+    [chequer.web.common :as web :refer [action delete-icon-button delete-menu-item edit-button
+                                        edit-form edit-icon-button edit-toggle errors-el field html
+                                        html-response more-menu move-buttons mutate raw
+                                        text-response toggle-signal]]
     [chequer.web.layout :as layout]
     [clojure.string :as str]
     [jolt.datastar.core :as ds]))
@@ -93,8 +95,9 @@
 
 
 (defn render-task
-  "#task-<id>: a checkbox toggling it between pending and completed, a menu of the other
-  states, its assignee and due date, its description and an inline edit form."
+  "#task-<id>: a checkbox toggling it between pending and completed, its assignee and due
+  date, a menu of the other states, its history and deletion, its description and an
+  inline edit form."
   [t v]
   (let [id (:task/id t)
         path (str "/tasks/" id)
@@ -112,16 +115,14 @@
       (when-let [a (:task/assignee t)] [:span.assignee (user-title v a)])
       (due-el (:task/due-at t) (lists/overdue? t (:now v)) v)
       [:span.controls
-       [:details.menu
-        [:summary "State"]
-        [:div.menu-items
+       (edit-icon-button signal)
+       (move-buttons path)
+       (more-menu
          (for [s [:working :abandoned :pending]
                :when (not= s state)]
            [:button {:type "button" :data-on:click (str "@post('" (state-url id s) "')")} (state-actions s)])
-         [:a {:href (str path "/history")} "History"]]]
-       (edit-button signal)
-       (move-buttons path)
-       [:button.danger {:type "button" :data-on:click (web/confirmed "Delete this task?" (str "@delete('" path "')"))} "Delete"]]]
+         [:a {:href (str path "/history")} "History"]
+         (delete-menu-item "Delete this task?" path))]]
      (when-let [d (:task/description t)]
        [:details [:summary "Description"] [:div.markdown (raw (md/render d))]])
      (edit-form signal path
@@ -152,12 +153,11 @@
       [:span.icon (:list.group/icon group)]
       [:span.title (:list.group/title group)]
       [:span.controls
-       (edit-button signal)
+       (edit-icon-button signal)
        (move-buttons path)
-       [:button.danger {:type "button" :data-task-count (str task-count)
-                        :data-on:click (str "confirm('Delete this group and its ' + el.dataset.taskCount + ' task(s)?') && "
-                                            "@delete('" path "')")}
-        "Delete"]]]
+       (delete-icon-button (str "confirm('Delete this group and its ' + el.dataset.taskCount + ' task(s)?') && "
+                                "@delete('" path "')")
+                           {:data-task-count (str task-count)})]]
      (edit-form signal path
                 (field "Title" "title" (:list.group/title group) {:required true})
                 (field "Icon" "icon" (:list.group/icon group) {:size 4})

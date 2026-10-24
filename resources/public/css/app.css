@@ -357,6 +357,26 @@ button.danger:hover {
   color: var(--danger);
 }
 
+/* Square buttons showing a stroked icon instead of a label. */
+button.icon-button {
+  padding: 0;
+  min-width: 2rem;
+}
+
+button.icon-button svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+button.icon-button.danger {
+  color: var(--danger);
+}
+
 .controls {
   display: flex;
   flex-wrap: wrap;
@@ -386,6 +406,12 @@ p.actions {
     min-height: 2.5rem;
     padding-inline: 0.8rem;
   }
+
+  button.icon-button,
+  details.menu.more > summary {
+    min-width: 2.5rem;
+    padding-inline: 0;
+  }
 }
 
 
@@ -411,6 +437,22 @@ details.menu > summary::after {
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
   transform: translateY(-0.12em) rotate(45deg);
+}
+
+/* The triple-dot menu shows its icon instead of the chevron. */
+details.menu.more > summary {
+  padding: 0;
+  min-width: 2rem;
+}
+
+details.menu.more > summary::after {
+  content: none;
+}
+
+details.menu.more > summary svg {
+  width: 1rem;
+  height: 1rem;
+  fill: currentColor;
 }
 
 details.menu[open] > summary {
@@ -442,6 +484,10 @@ details.menu[open] > summary {
   border-radius: var(--radius-sm);
   color: var(--text);
   font-size: 0.875rem;
+}
+
+.menu-items > button.danger {
+  color: var(--danger);
 }
 
 .menu-items > a:hover {

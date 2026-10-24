@@ -184,6 +184,54 @@
   [:button {:type "button" :data-on:click (str "$" signal " = !$" signal)} "Edit"])
 
 
+(def ^:private pencil-icon
+  (raw (str "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
+            "<path d=\"M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z\"/></svg>")))
+
+
+(def ^:private trash-icon
+  (raw (str "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
+            "<path d=\"M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6\"/></svg>")))
+
+
+(def ^:private dots-icon
+  (raw (str "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
+            "<circle cx=\"12\" cy=\"5\" r=\"1.75\"/><circle cx=\"12\" cy=\"12\" r=\"1.75\"/>"
+            "<circle cx=\"12\" cy=\"19\" r=\"1.75\"/></svg>")))
+
+
+(defn edit-icon-button
+  "An edit-button showing a pencil icon."
+  [signal]
+  [:button.icon-button {:type "button" :title "Edit" :aria-label "Edit"
+                        :data-on:click (str "$" signal " = !$" signal)}
+   pencil-icon])
+
+
+(defn delete-icon-button
+  "A red trash can button running the Datastar expression click, with extra attrs."
+  ([click] (delete-icon-button click {}))
+  ([click attrs]
+   [:button.icon-button.danger (merge {:type "button" :title "Delete" :aria-label "Delete"
+                                       :data-on:click click}
+                                      attrs)
+    trash-icon]))
+
+
+(defn more-menu
+  "A dropdown menu of items behind a vertical triple-dot button."
+  [& items]
+  [:details.menu.more
+   [:summary {:title "More actions" :aria-label "More actions"} dots-icon]
+   (into [:div.menu-items] items)])
+
+
+(defn delete-menu-item
+  "A red menu item running a DELETE of path once question is confirmed."
+  [question path]
+  [:button.danger {:type "button" :data-on:click (confirmed question (str "@delete('" path "')"))} "Delete"])
+
+
 (defn edit-form
   "An inline edit form, shown while signal is true, that PUTs its fields to path."
   [signal path & body]

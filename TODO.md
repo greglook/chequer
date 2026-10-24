@@ -17,13 +17,9 @@ A list of miscellaneous items I notice that I want to fix later.
 - Change `/plan-groups/:id/move?dir=up` to pass the direction in the body
 - Should the `/plan-groups/:id` route be `/plans/:plan/groups/:id` instead?
 
-## Bugs
-- Reordering groups doesn't seem to work yet (tasks does)
-
 ## UI
 - Icons need an emoji picker built in instead of requiring the user to enter one directly
 - "Add Plans" to a list should be a modal view, not a collapsed list on the page
-- Task rows should use a pencil icon for edit, a red trash can for delete, and gripper for drag-n-drop
 - Small circular badges to show task assignees
     - label with first letter of user name
     - generate unique stable color by hashing name
@@ -31,3 +27,6 @@ A list of miscellaneous items I notice that I want to fix later.
 ## Ordering
 - Drag and drop reordering
 - Don't record history for reordering changes
+
+## Bugs
+- ...
