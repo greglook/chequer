@@ -590,6 +590,53 @@ form.edit > button {
   justify-self: start;
 }
 
+/* Icon fields open an emoji picker below the input. */
+.icon-field {
+  position: relative;
+}
+
+.icon-picker {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 0.25rem);
+  z-index: 6;
+  width: min(17rem, calc(100vw - 2rem));
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.emoji-results {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.125rem;
+  min-height: 2.5rem;
+}
+
+.emoji-results button {
+  font-size: 1.5rem;
+  min-height: 2.75rem;
+  padding: 0;
+  color: var(--text);
+}
+
+.emoji-results .none {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0.5rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.icon-picker > button {
+  justify-self: end;
+}
+
 /* One-line add forms: new task, new group. */
 form.new-task,
 form.new-group {

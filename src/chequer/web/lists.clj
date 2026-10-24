@@ -11,7 +11,7 @@
     [chequer.users :as users]
     [chequer.web.common :as web :refer [action delete-icon-button delete-menu-item edit-button
                                         edit-form edit-icon-button edit-toggle errors-el field html
-                                        html-response more-menu move-buttons mutate raw
+                                        html-response icon-field more-menu move-buttons mutate raw
                                         text-response toggle-signal]]
     [chequer.web.layout :as layout]
     [clojure.string :as str]
@@ -83,7 +83,7 @@
   "The fields of a task form."
   [t v]
   (list (field "Title" "title" (:task/title t) {:required true})
-        (field "Icon" "icon" (:task/icon t) {:size 4})
+        (icon-field "Task" (:task/id t) (:task/icon t))
         (field "Estimate (minutes)" "estimate" (some-> (:task/estimate t) str) {:inputmode "numeric" :size 6})
         (due-field (:task/due-at t) v)
         [:label "Assignee"
@@ -160,7 +160,7 @@
                            {:data-task-count (str task-count)})]]
      (edit-form signal path
                 (field "Title" "title" (:list.group/title group) {:required true})
-                (field "Icon" "icon" (:list.group/icon group) {:size 4})
+                (icon-field "Group" id (:list.group/icon group))
                 (errors-el (str "list-group-" id "-errors"))
                 [:button "Save"])]))
 
@@ -231,7 +231,7 @@
       [:button.danger {:type "button" :data-on:click (web/confirmed "Delete this list?" (str "@delete('" path "')"))} "Delete"]]
      (edit-form signal path
                 (field "Title" "title" (:list/title l) {:required true})
-                (field "Icon" "icon" (:list/icon l) {:size 4})
+                (icon-field "List" id (:list/icon l))
                 (due-field (:list/due-at l) v)
                 [:label "Description" [:textarea {:name "description" :rows 3} (or (:list/description l) "")]]
                 (errors-el (str "list-" id "-errors"))
@@ -403,7 +403,7 @@
                               [:h1 "New list"]
                               [:form {:method "post" :action "/lists" :data-on:submit (action "post" "/lists")}
                                (field "Title" "title" nil {:required true :autofocus true})
-                               (field "Icon" "icon" nil {:size 4})
+                               (icon-field "List" nil nil)
                                (field "Due" "due" nil {:type "date"})
                                [:label "Description" [:textarea {:name "description" :rows 4}]]
                                (plan-picker (plans/list-plans db)

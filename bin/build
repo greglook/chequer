@@ -18,6 +18,24 @@ elif [[ $1 = image ]]; then
         podman push git.app.gslook.net/greg/chequer:dev
     fi
 
+elif [[ $1 = update-emoji ]]; then
+    # Regenerate resources/chequer/emoji.txt from Unicode's emoji-test.txt: the fully-qualified
+    # emoji without skin tone variants, as tab-separated emoji and name lines under their
+    # group and subgroup headings.
+    out="resources/chequer/emoji.txt"
+    curl -sSfL "https://www.unicode.org/Public/emoji/latest/emoji-test.txt" | awk '
+      /^# (Version|Date):/ { print; next }
+      /^# (group|subgroup):/ { print; next }
+      /; fully-qualified/ {
+        if ($0 ~ /(^| )1F3F[B-F]( |;)/) next
+        sub(/^[^#]*# /, "")
+        emoji = $1
+        sub(/^[^ ]+ E[0-9.]+ /, "")
+        print emoji "\t" $0
+      }
+    ' > "$out"
+    echo "Wrote $(grep -vc '^#' "$out") emoji to $out"
+
 else
     echo "Unknown subcommand: $1" >&2
     exit 1

@@ -7,6 +7,7 @@
     [chequer.oidc :as oidc]
     [chequer.router :as router]
     [chequer.sessions :as sessions]
+    [chequer.web.emoji :as emoji]
     [chequer.web.history :as history]
     [chequer.web.lists :as lists]
     [chequer.web.plans :as plans]
@@ -36,6 +37,7 @@
 (def ^:private routes
   "Application routes as [method path-pattern handler]."
   (vec (concat [[:get ["healthz"] healthz]]
+               emoji/routes
                history/routes
                lists/routes
                oidc/routes

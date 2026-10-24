@@ -242,3 +242,29 @@
                                 :headers {"origin" base-url "content-type" "application/json" "datastar-request" "true"}
                                 :body (ByteArrayInputStream. (.getBytes "{not json" "UTF-8"))})))
             "glimmer-datastar parses Datastar bodies first; malformed JSON must still be a 400")))))
+
+
+(deftest icon-fields-open-an-emoji-picker
+  (with-app
+    (fn [h _]
+      (let [pid (create-plan! h "P")
+            new-page (:body (request h :get "/plans/new"))
+            plan-page (:body (request h :get (str "/plans/" pid)))]
+        (is (str/includes? new-page "id=\"icon-results-PlanNew\""))
+        (is (str/includes? plan-page (str "id=\"icon-results-Plan" pid "\"")))
+        (is (str/includes? plan-page "name=\"icon\""))))))
+
+
+(deftest emoji-search-patches-the-picker-results
+  (with-app
+    (fn [h _]
+      (let [r (request h :get "/emoji?target=icon-results-Task12&q=grapes")]
+        (is (= 200 (:status r)))
+        (is (str/includes? (:body r) "datastar-patch-elements"))
+        (is (str/includes? (:body r) "id=\"icon-results-Task12\""))
+        (is (str/includes? (:body r) "data-emoji=\"🍇\"")))
+      (is (str/includes? (:body (request h :get "/emoji?target=icon-results-Task12&q=zzzqqq"))
+                         "No matching emoji."))
+      (is (= 20 (count (re-seq #"data-emoji=" (:body (request h :get "/emoji?target=icon-results-PlanNew"))))))
+      (is (= 400 (:status (request h :get "/emoji?q=x"))))
+      (is (= 400 (:status (request h :get "/emoji?target=%22%3E%3Cscript&q=x")))))))

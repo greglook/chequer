@@ -7,7 +7,7 @@
     [chequer.markdown :as md]
     [chequer.web.common :as web :refer [action confirmed delete-icon-button delete-menu-item
                                         edit-button edit-form edit-icon-button edit-toggle errors-el
-                                        field html html-response more-menu move-buttons mutate raw
+                                        field html html-response icon-field more-menu move-buttons mutate raw
                                         text-response toggle-signal]]
     [chequer.web.layout :as layout]
     [jolt.datastar.core :as ds]))
@@ -19,7 +19,7 @@
   "The fields of a task form."
   [t]
   (list (field "Title" "title" (:plan.task/title t) {:required true})
-        (field "Icon" "icon" (:plan.task/icon t) {:size 4})
+        (icon-field "Task" (:plan.task/id t) (:plan.task/icon t))
         (field "Estimate (minutes)" "estimate" (some-> (:plan.task/estimate t) str) {:inputmode "numeric" :size 6})
         [:label "Description" [:textarea {:name "description" :rows 3} (or (:plan.task/description t) "")]]))
 
@@ -74,7 +74,7 @@
        (delete-icon-button (confirmed "Delete this group and its tasks?" (str "@delete('" path "')")))]]
      (edit-form signal path
                 (field "Title" "title" (:plan.group/title group) {:required true})
-                (field "Icon" "icon" (:plan.group/icon group) {:size 4})
+                (icon-field "Group" id (:plan.group/icon group))
                 (errors-el (str "plan-group-" id "-errors"))
                 [:button "Save"])]))
 
@@ -119,7 +119,7 @@
       [:button.danger {:type "button" :data-on:click (confirmed "Delete this plan?" (str "@delete('" path "')"))} "Delete"]]
      (edit-form signal path
                 (field "Title" "title" (:plan/title p) {:required true})
-                (field "Icon" "icon" (:plan/icon p) {:size 4})
+                (icon-field "Plan" id (:plan/icon p))
                 [:label "Description" [:textarea {:name "description" :rows 3} (or (:plan/description p) "")]]
                 (errors-el (str "plan-" id "-errors"))
                 [:button "Save"])]))
@@ -182,7 +182,7 @@
                               [:h1 "New plan"]
                               [:form {:method "post" :action "/plans" :data-on:submit (action "post" "/plans")}
                                (field "Title" "title" nil {:required true :autofocus true})
-                               (field "Icon" "icon" nil {:size 4})
+                               (icon-field "Plan" nil nil)
                                [:label "Description" [:textarea {:name "description" :rows 4}]]
                                (errors-el "new-plan-errors")
                                [:button "Create"]])))

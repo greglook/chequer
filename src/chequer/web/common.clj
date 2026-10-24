@@ -167,6 +167,36 @@
    [:label label [:input (merge {:name input-name :value (or value "")} attrs)]]))
 
 
+(defn icon-field
+  "An icon input that opens an emoji picker when clicked. The picker's search box fetches
+  up to 20 matches from /emoji as you type; picking one fills the input and closes it.
+  kind and id (nil in a form for a new entity) make the picker's signal and ids unique on
+  the page."
+  [kind id value]
+  (let [k (str kind (or id "New"))
+        signal (str "$_icon" k)
+        results (str "icon-results-" k)
+        picker "el.closest('.icon-field')"
+        search (str picker ".querySelector('input[type=search]')")
+        icon (str picker ".querySelector('input[name=icon]')")
+        fetch (str "@get('/emoji?target=" results "&q=' + encodeURIComponent(" search ".value))")]
+    [:div.icon-field {:data-signals__ifmissing (str "{_icon" k ": false}")
+                      :data-on:click__outside (str signal " = false")
+                      :data-on:keydown (str "evt.key === 'Escape' && (" signal " = false)")}
+     (field "Icon" "icon" value {:size 4 :autocomplete "off"
+                                 :data-on:click (str signal " = true; " fetch "; "
+                                                     "setTimeout(() => " search ".focus())")})
+     [:div.icon-picker {:data-show signal :style "display: none"
+                        :data-on:click (str "evt.target.dataset.emoji && "
+                                            "(" icon ".value = evt.target.dataset.emoji, " signal " = false)")}
+      [:input {:type "search" :placeholder "Search emoji" :aria-label "Search emoji" :autocomplete "off"
+               :data-on:input__debounce.150ms fetch
+               :data-on:keydown (str "evt.key === 'Enter' && (evt.preventDefault(), "
+                                     picker ".querySelector('[data-emoji]')?.click())")}]
+      [:div.emoji-results {:id results}]
+      [:button {:type "button" :data-on:click (str icon ".value = ''; " signal " = false")} "Clear icon"]]]))
+
+
 (defn toggle-signal
   "Local (unsent) signal name toggling the edit form of an element."
   [kind id]

@@ -43,6 +43,8 @@
   (is (= {:value "👨‍👩‍👧‍👦"} (plans/validate-icon "👨‍👩‍👧‍👦")) "a family ZWJ sequence is 7 code points")
   (is (contains? (plans/validate-icon "a") :error))
   (is (contains? (plans/validate-icon "🧳1") :error))
+  (is (= {:value "7️⃣"} (plans/validate-icon "7️⃣")) "a digit is allowed in a keycap")
+  (is (contains? (plans/validate-icon "7") :error))
   (is (contains? (plans/validate-icon "🧳🧳🧳🧳🧳🧳🧳🧳🧳") :error) "9 code points is too many")
   (is (= {:value nil} (plans/validate-estimate "")))
   (is (= {:value 0} (plans/validate-estimate "0")))

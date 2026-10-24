@@ -32,14 +32,19 @@
    :string])
 
 
+(def ^:private keycap
+  "A digit keycap emoji, such as 1️⃣."
+  (re-pattern "[0-9]️?⃣"))
+
+
 (def Icon
   "One emoji, approximated as at most 8 code points (enough for ZWJ sequences) with no ASCII
-  letters, digits or whitespace."
+  letters, whitespace or digits outside a keycap."
   [:maybe {:decode/string #(blank->nil (str/trim (str %)))}
    [:and
     :string
     [:fn {:error/message "must be a single emoji"} #(<= (count %) 8)]
-    [:fn {:error/message "must be a single emoji"} #(not (re-find #"[A-Za-z0-9\s]" %))]]])
+    [:fn {:error/message "must be a single emoji"} #(not (re-find #"[A-Za-z0-9\s]" (str/replace % keycap "")))]]])
 
 
 (def Estimate
