@@ -12,6 +12,12 @@ elif [[ $1 = release ]]; then
     shift
     exec jolt -A:release build -m chequer.main -o target/release/chequer "$@"
 
+elif [[ $1 = image ]]; then
+    podman build --format docker --tag git.app.gslook.net/greg/chequer:dev .
+    if [[ $2 = --push ]]; then
+        podman push git.app.gslook.net/greg/chequer:dev
+    fi
+
 else
     echo "Unknown subcommand: $1" >&2
     exit 1

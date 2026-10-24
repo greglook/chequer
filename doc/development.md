@@ -95,7 +95,7 @@ The binary is written to `target/release/chequer`. Static assets and migrations 
 runs from any directory. To build the container image instead:
 
 ```sh
-podman build --format docker -t chequer .
+bin/build image [--push]
 ```
 
 See [operations.md](operations.md) for running and configuring either one.
