@@ -29,7 +29,7 @@ Or build the binary (this requires Jolt) and run it with the example config:
 
 ```sh
 bin/build release
-cp chequer.example.ini chequer.ini
+cp config.example.ini config.ini
 target/release/chequer server
 ```
 

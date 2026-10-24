@@ -23,8 +23,8 @@ Build the binary with `bin/build release` (see
 
 ```sh
 install -m 755 target/release/chequer /usr/local/bin/chequer
-cp chequer.example.ini /etc/chequer/chequer.ini
-chequer --config /etc/chequer/chequer.ini server
+cp config.example.ini /etc/chequer/config.ini
+chequer --config /etc/chequer/config.ini server
 ```
 
 The binary takes a subcommand:
@@ -36,7 +36,8 @@ The binary takes a subcommand:
 - `backup DEST` writes a copy of the database to the file `DEST`.
 
 The config file comes from `--config`, then the `CHEQUER_CONFIG` environment
-variable, then `chequer.ini` in the working directory.
+variable, then `config.ini` in the working directory, and finally from
+`/etc/chequer/config.ini`.
 
 ### Container
 
@@ -51,12 +52,12 @@ podman run -d --name chequer -p 3000:3000 -v chequer-data:/data chequer
 The image's default config listens on `0.0.0.0:3000`, keeps the database at
 `/data/chequer.db`, sets `base-url` to `http://localhost:3000`, and runs in
 single-user mode. To change any of that, mount your own config over
-`/etc/chequer/chequer.ini` and keep `listen` and `database.path` as they are:
+`/etc/chequer/config.ini` and keep `listen` and `database.path` as they are:
 
 ```sh
 podman run -d --name chequer -p 3000:3000 \
   -v chequer-data:/data \
-  -v ./chequer.ini:/etc/chequer/chequer.ini:ro \
+  -v ./config.ini:/etc/chequer/config.ini:ro \
   chequer
 ```
 
@@ -69,7 +70,7 @@ images, hence `--format docker`; Docker needs no flag.
 ## Configuration
 
 The config is an ini file. Lines starting with `;` or `#` are comments, and
-every key is optional. [`chequer.example.ini`](../chequer.example.ini) lists
+every key is optional. [`config.example.ini`](../config.example.ini) lists
 them all with their defaults.
 
 | Section         | Key               | Default                  | Description |
@@ -217,23 +218,17 @@ render cache counters.
 ## Backups
 
 The database is a single SQLite file in WAL mode, so don't just copy the file
-while the server is running. Any of these make a consistent copy while it runs:
+while the server is running. Use the `backup` command to make a consistent copy
+while it runs:
 
 ```sh
-# With the binary, using the server's config. Refuses to overwrite DEST.
-chequer --config /etc/chequer/chequer.ini backup /backups/chequer-$(date +%F).db
-
-# With the sqlite3 shell.
-sqlite3 /var/lib/chequer/chequer.db "VACUUM INTO '/backups/chequer-$(date +%F).db'"
-sqlite3 /var/lib/chequer/chequer.db ".backup /backups/chequer-$(date +%F).db"
+chequer --config /etc/chequer/config.ini backup /backups/chequer-$(date +%F).db
 ```
 
 In a container, run the backup in the running container and copy it out:
 
 ```sh
 podman exec chequer chequer backup /data/backup.db
-podman cp chequer:/data/backup.db ./chequer-$(date +%F).db
-podman exec chequer rm /data/backup.db
 ```
 
 To restore, stop the server, remove any `-wal` and `-shm` files next to the

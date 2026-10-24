@@ -7,4 +7,4 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 mkdir -p dev/state
 
-exec jolt -m chequer.main --config dev/chequer.ini "$@"
+exec jolt -m chequer.main --config dev/config.ini "$@"

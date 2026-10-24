@@ -14,7 +14,7 @@ bin/repl
 
 ## Dev server
 
-Run the app on `localhost:3000` using the dev config in `dev/chequer.ini`:
+Run the app on `localhost:3000` using the dev config in `dev/config.ini`:
 
 ```sh
 bin/run server

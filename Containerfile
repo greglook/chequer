@@ -4,7 +4,7 @@
 #   podman run -d -p 3000:3000 -v chequer-data:/data chequer
 #
 # The default config listens on 0.0.0.0:3000, stores the database in /data and
-# runs in single-user mode. Mount your own config over /etc/chequer/chequer.ini
+# runs in single-user mode. Mount your own config over /etc/chequer/config.ini
 # to change it; see doc/operations.md.
 
 ARG DEBIAN_VERSION=trixie
@@ -59,11 +59,11 @@ RUN useradd --user-group --uid 10001 --home-dir /data --no-create-home chequer \
       '' \
       '[database]' \
       'path = /data/chequer.db' \
-      > /etc/chequer/chequer.ini
+      > /etc/chequer/config.ini
 
 COPY --from=build /src/target/release/chequer /usr/local/bin/chequer
 
-ENV CHEQUER_CONFIG=/etc/chequer/chequer.ini
+ENV CHEQUER_CONFIG=/etc/chequer/config.ini
 USER chequer
 WORKDIR /data
 VOLUME /data
