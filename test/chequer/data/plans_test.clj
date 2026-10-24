@@ -127,9 +127,8 @@
         (tx! d #(plans/move-plan-task! % u {:id b :direction :up}))
         (tx! d #(plans/move-plan-task! % u {:id dd :direction :down}))
         (is (= [["c"] [["G2" ["d"]] ["G1" ["b" "a"]]]] (shape (plans/load-plan d pid))))
-        (is (= ["create" "create" "create" "create" "create" "create" "create" "move" "move"]
-               (mapv :action (events d)))
-            "a no-op move records no event")))))
+        (is (= (repeat 7 "create") (mapv :action (events d)))
+            "reordering records no events")))))
 
 
 (deftest updating-groups-and-tasks-records-diffs

@@ -119,12 +119,11 @@
 
 
 (defn- move-entity!
-  [tx user {:keys [table entity-type scope-sql]} {:keys [id direction]} old]
-  (let [lid (:list_id old)]
-    (when (rank/move tx {:table table :scope-sql (scope-sql old) :id id :direction direction})
-      (record! tx user entity-type id lid :move {:direction direction})
-      (touch-list! lid :structure))
-    nil))
+  "Move row id of table one place in direction. Reordering records no event."
+  [tx {:keys [table scope-sql]} {:keys [id direction]} old]
+  (when (rank/move tx {:table table :scope-sql (scope-sql old) :id id :direction direction})
+    (touch-list! (:list_id old) :structure))
+  nil)
 
 
 ;; ## Lists
@@ -228,9 +227,9 @@
 
 (defn move-group!
   "Move group {:id} one place in {:direction :up|:down}."
-  [tx user {:keys [id] :as attrs}]
-  (move-entity! tx user {:table "list_group" :entity-type "list.group"
-                         :scope-sql (fn [g] ["list_id = ?" (:list_id g)])}
+  [tx _user {:keys [id] :as attrs}]
+  (move-entity! tx {:table "list_group"
+                    :scope-sql (fn [g] ["list_id = ?" (:list_id g)])}
                 attrs (plans/fetch-existing tx "list_group" id)))
 
 
@@ -278,9 +277,9 @@
 
 (defn move-task!
   "Move task {:id} one place in {:direction :up|:down} among the tasks of its group."
-  [tx user {:keys [id] :as attrs}]
-  (move-entity! tx user {:table "task" :entity-type "task"
-                         :scope-sql (fn [t] ["list_id = ? AND group_id IS ?" (:list_id t) (:group_id t)])}
+  [tx _user {:keys [id] :as attrs}]
+  (move-entity! tx {:table "task"
+                    :scope-sql (fn [t] ["list_id = ? AND group_id IS ?" (:list_id t) (:group_id t)])}
                 attrs (plans/fetch-existing tx "task" id)))
 
 

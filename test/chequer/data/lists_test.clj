@@ -191,9 +191,7 @@
         (tx! d #(lists/move-task! % u {:id b :direction :up}))
         (tx! d #(lists/move-task! % u {:id d2 :direction :down}))
         (is (= [["c"] [["G2" ["d"]] ["G1" ["b" "a"]]]] (shape (lists/load-list d lid))))
-        (is (= [["move" "list.group" g2] ["move" "task" b]]
-               (mapv (juxt :action :entity_type :entity_id) (subvec (events d) before)))
-            "a no-op move records no event")
+        (is (= before (count (events d))) "reordering records no events")
         (is (= g1 (:group_id (db/q1 d ["SELECT group_id FROM task WHERE id = ?" b]))))))))
 
 
