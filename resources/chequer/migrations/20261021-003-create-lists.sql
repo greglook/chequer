@@ -14,7 +14,7 @@ CREATE TABLE list_group (
   id INTEGER PRIMARY KEY,
   list_id INTEGER NOT NULL REFERENCES list(id) ON DELETE CASCADE,
   source_id INTEGER REFERENCES plan_group(id) ON DELETE SET NULL,
-  "order" REAL NOT NULL,
+  rank REAL NOT NULL,
   title TEXT NOT NULL,
   icon TEXT);
 
@@ -23,7 +23,7 @@ CREATE TABLE task (
   list_id INTEGER NOT NULL REFERENCES list(id) ON DELETE CASCADE,
   group_id INTEGER REFERENCES list_group(id) ON DELETE CASCADE,
   source_id INTEGER REFERENCES plan_task(id) ON DELETE SET NULL,
-  "order" REAL NOT NULL,
+  rank REAL NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
   icon TEXT,
@@ -41,9 +41,9 @@ CREATE TABLE task (
 
 CREATE INDEX list_active ON list(archived_at, due_at);
 
-CREATE INDEX list_group_list ON list_group(list_id, "order");
+CREATE INDEX list_group_list ON list_group(list_id, rank);
 
-CREATE INDEX task_list ON task(list_id, group_id, "order");
+CREATE INDEX task_list ON task(list_id, group_id, rank);
 
 CREATE INDEX task_assignee ON task(assignee_id) WHERE assignee_id IS NOT NULL;
 

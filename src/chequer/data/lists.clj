@@ -5,7 +5,7 @@
     [chequer.data.plans :as plans]
     [chequer.db :as db]
     [chequer.event :as event]
-    [chequer.order :as order]
+    [chequer.rank :as rank]
     [chequer.time :as time]
     [jdbc.core :as jdbc]))
 
@@ -58,7 +58,7 @@
   {:list.group/id (:id r)
    :list.group/list (:list_id r)
    :list.group/source (:source_id r)
-   :list.group/order (:order r)
+   :list.group/rank (:rank r)
    :list.group/title (:title r)
    :list.group/icon (:icon r)})
 
@@ -69,7 +69,7 @@
    :task/list (:list_id r)
    :task/group (:group_id r)
    :task/source (:source_id r)
-   :task/order (:order r)
+   :task/rank (:rank r)
    :task/title (:title r)
    :task/description (:description r)
    :task/icon (:icon r)
@@ -121,7 +121,7 @@
 (defn- move-entity!
   [tx user {:keys [table entity-type scope-sql]} {:keys [id direction]} old]
   (let [lid (:list_id old)]
-    (when (order/move tx {:table table :scope-sql (scope-sql old) :id id :direction direction})
+    (when (rank/move tx {:table table :scope-sql (scope-sql old) :id id :direction direction})
       (record! tx user entity-type id lid :move {:direction direction})
       (touch-list! lid :structure))
     nil))
@@ -199,7 +199,7 @@
         id (db/insert! tx :list_group (assoc v
                                              :list_id list-id
                                              :source_id source-id
-                                             :order (plans/next-order tx "list_group" ["list_id = ?" list-id])))]
+                                             :rank (plans/next-rank tx "list_group" ["list_id = ?" list-id])))]
     (record! tx user "list.group" id list-id :create {:title (:title v)})
     (touch-list! list-id :structure)
     id))
@@ -218,7 +218,7 @@
   "Delete group {:id} and its tasks, logging a :delete event for each. A missing group does nothing."
   [tx user {:keys [id]}]
   (when-let [{lid :list_id :as old} (plans/fetch-row tx "list_group" id)]
-    (doseq [t (jdbc/fetch tx ["SELECT id, title FROM task WHERE group_id = ? ORDER BY \"order\", id" id])]
+    (doseq [t (jdbc/fetch tx ["SELECT id, title FROM task WHERE group_id = ? ORDER BY rank, id" id])]
       (record! tx user "task" (:id t) lid :delete {:title (:title t)}))
     (record! tx user "list.group" id lid :delete {:title (:title old)})
     (jdbc/execute! tx ["DELETE FROM list_group WHERE id = ?" id])
@@ -249,7 +249,7 @@
                               :list_id list-id
                               :group_id group-id
                               :source_id source-id
-                              :order (plans/next-order tx "task" ["list_id = ? AND group_id IS ?" list-id group-id])
+                              :rank (plans/next-rank tx "task" ["list_id = ? AND group_id IS ?" list-id group-id])
                               :created_at now :created_by (:id user)
                               :updated_at now :updated_by (:id user)))]
     (record! tx user "task" id list-id :create {:title (:title v)})
@@ -354,8 +354,8 @@
   or nil."
   [db id]
   (when (db/q1 db ["SELECT id FROM list WHERE id = ?" id])
-    (let [groups (map row->group (db/q db ["SELECT * FROM list_group WHERE list_id = ? ORDER BY \"order\", id" id]))
-          task-ids (update-vals (group-by :group_id (db/q db ["SELECT id, group_id FROM task WHERE list_id = ? ORDER BY \"order\", id" id]))
+    (let [groups (map row->group (db/q db ["SELECT * FROM list_group WHERE list_id = ? ORDER BY rank, id" id]))
+          task-ids (update-vals (group-by :group_id (db/q db ["SELECT id, group_id FROM task WHERE list_id = ? ORDER BY rank, id" id]))
                                 #(mapv :id %))]
       {:ungrouped (get task-ids nil [])
        :groups (mapv (fn [g] {:group g :task-ids (get task-ids (:list.group/id g) [])}) groups)})))
@@ -365,9 +365,9 @@
   "{:list l :ungrouped [tasks] :groups [{:group g :tasks [...]}]} in display order, or nil."
   [db id]
   (when-let [l (db/q1 db ["SELECT * FROM list WHERE id = ?" id])]
-    (let [groups (map row->group (db/q db ["SELECT * FROM list_group WHERE list_id = ? ORDER BY \"order\", id" id]))
+    (let [groups (map row->group (db/q db ["SELECT * FROM list_group WHERE list_id = ? ORDER BY rank, id" id]))
           tasks (group-by :task/group
-                          (map row->task (db/q db ["SELECT * FROM task WHERE list_id = ? ORDER BY \"order\", id" id])))]
+                          (map row->task (db/q db ["SELECT * FROM task WHERE list_id = ? ORDER BY rank, id" id])))]
       {:list (row->list l)
        :ungrouped (vec (get tasks nil))
        :groups (mapv (fn [g] {:group g :tasks (vec (get tasks (:list.group/id g)))}) groups)})))

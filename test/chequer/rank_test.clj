@@ -1,51 +1,51 @@
-(ns chequer.order-test
+(ns chequer.rank-test
   (:require
     [chequer.db :as db]
-    [chequer.order :as order]
+    [chequer.rank :as rank]
     [chequer.test-helpers :as helpers]
     [clojure.test :refer [deftest is]]
     [jdbc.core :as jdbc]))
 
 
-(deftest append-order-follows-the-maximum
-  (is (= 1 (order/append-order [])))
-  (is (= 4.5 (order/append-order [1 3.5 2]))))
+(deftest append-rank-follows-the-maximum
+  (is (= 1 (rank/append-rank [])))
+  (is (= 4.5 (rank/append-rank [1 3.5 2]))))
 
 
 (deftest between-is-the-midpoint-or-one-past-a-missing-neighbour
-  (is (= 1.5 (order/between 1 2)))
-  (is (= 0 (order/between nil 1)))
-  (is (= 4 (order/between 3 nil))))
+  (is (= 1.5 (rank/between 1 2)))
+  (is (= 0 (rank/between nil 1)))
+  (is (= 4 (rank/between 3 nil))))
 
 
 (deftest repeated-midpoints-eventually-need-renumbering
-  (let [steps (->> (iterate #(order/between 1 %) 2.0)
-                   (take-while #(not (order/needs-renumber? 1 %)))
+  (let [steps (->> (iterate #(rank/between 1 %) 2.0)
+                   (take-while #(not (rank/needs-renumber? 1 %)))
                    (count))]
     (is (< 25 steps 60))))
 
 
 (defn- with-things
-  "Call (f d) with a thing table holding rows a, b, c (orders 1..3) in scope 1 and x in scope 2."
+  "Call (f d) with a thing table holding rows a, b, c (ranks 1..3) in scope 1 and x in scope 2."
   [f]
   (helpers/with-test-db
     (fn [d]
       (db/with-tx [tx d]
-        (jdbc/execute! tx "CREATE TABLE thing (id INTEGER PRIMARY KEY, scope INTEGER, name TEXT, \"order\" REAL)")
+        (jdbc/execute! tx "CREATE TABLE thing (id INTEGER PRIMARY KEY, scope INTEGER, name TEXT, rank REAL)")
         (doseq [[s n o] [[1 "a" 1] [1 "b" 2] [1 "c" 3] [2 "x" 1.5]]]
-          (db/insert! tx :thing {:scope s :name n :order o})))
+          (db/insert! tx :thing {:scope s :name n :rank o})))
       (f d))))
 
 
 (defn- names
   [d scope]
-  (mapv :name (db/q d ["SELECT name FROM thing WHERE scope = ? ORDER BY \"order\"" scope])))
+  (mapv :name (db/q d ["SELECT name FROM thing WHERE scope = ? ORDER BY rank" scope])))
 
 
 (defn- move!
   [d id direction]
   (:result (db/with-tx [tx d]
-             (order/move tx {:table "thing" :scope-sql ["scope = ?" 1] :id id :direction direction}))))
+             (rank/move tx {:table "thing" :scope-sql ["scope = ?" 1] :id id :direction direction}))))
 
 
 (deftest move-swaps-with-a-neighbour-within-the-scope
@@ -74,5 +74,5 @@
       (dotimes [i 120]
         (move! d (if (even? i) 3 2) :up)
         (is (= (if (even? i) ["a" "c" "b"] ["a" "b" "c"]) (names d 1))))
-      (let [orders (map :order (db/q d ["SELECT \"order\" FROM thing WHERE scope = 1"]))]
-        (is (apply distinct? orders) "without renumbering, the halved gaps would collapse")))))
+      (let [ranks (map :rank (db/q d ["SELECT rank FROM thing WHERE scope = 1"]))]
+        (is (apply distinct? ranks) "without renumbering, the halved gaps would collapse")))))

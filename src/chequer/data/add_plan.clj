@@ -22,7 +22,7 @@
   (reduce (fn [m {:keys [id title]}]
             (update m (normalize-title title) #(or % id)))
           {}
-          (jdbc/fetch tx ["SELECT id, title FROM list_group WHERE list_id = ? ORDER BY \"order\", id" list-id])))
+          (jdbc/fetch tx ["SELECT id, title FROM list_group WHERE list_id = ? ORDER BY rank, id" list-id])))
 
 
 (defn- list-task-titles
@@ -37,7 +37,7 @@
 (defn- plan-tasks
   "The plan's tasks in display order: ungrouped first, then each group's in group order."
   [tx plan-id groups]
-  (let [by-group (group-by :group_id (jdbc/fetch tx ["SELECT * FROM plan_task WHERE plan_id = ? ORDER BY \"order\", id"
+  (let [by-group (group-by :group_id (jdbc/fetch tx ["SELECT * FROM plan_task WHERE plan_id = ? ORDER BY rank, id"
                                                      plan-id]))]
     (concat (get by-group nil) (mapcat #(get by-group (:id %)) groups))))
 
@@ -49,7 +49,7 @@
   [tx user list-id plan-id]
   (plans/fetch-existing tx "list" list-id)
   (let [plan (plans/fetch-existing tx "plan" plan-id)
-        groups (jdbc/fetch tx ["SELECT * FROM plan_group WHERE plan_id = ? ORDER BY \"order\", id" plan-id])
+        groups (jdbc/fetch tx ["SELECT * FROM plan_group WHERE plan_id = ? ORDER BY rank, id" plan-id])
         [dest _ groups-created]
         (reduce (fn [[dest matched n] g]
                   (if-let [id (matched (normalize-title (:title g)))]

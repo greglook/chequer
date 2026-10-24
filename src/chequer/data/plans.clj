@@ -3,7 +3,7 @@
   (:require
     [chequer.db :as db]
     [chequer.event :as event]
-    [chequer.order :as order]
+    [chequer.rank :as rank]
     [chequer.time :as time]
     [clojure.string :as str]
     [jdbc.core :as jdbc]
@@ -119,7 +119,7 @@
   [r]
   {:plan.group/id (:id r)
    :plan.group/plan (:plan_id r)
-   :plan.group/order (:order r)
+   :plan.group/rank (:rank r)
    :plan.group/title (:title r)
    :plan.group/icon (:icon r)})
 
@@ -129,7 +129,7 @@
   {:plan.task/id (:id r)
    :plan.task/plan (:plan_id r)
    :plan.task/group (:group_id r)
-   :plan.task/order (:order r)
+   :plan.task/rank (:rank r)
    :plan.task/title (:title r)
    :plan.task/description (:description r)
    :plan.task/icon (:icon r)
@@ -162,10 +162,10 @@
                             (concat (map changes cols) [id])))))
 
 
-(defn next-order
+(defn next-rank
   [tx table [where & params]]
-  (order/append-order
-    (map :order (jdbc/fetch tx (into [(str "SELECT \"order\" FROM " table " WHERE " where)] params)))))
+  (rank/append-rank
+    (map :rank (jdbc/fetch tx (into [(str "SELECT rank FROM " table " WHERE " where)] params)))))
 
 
 ;; ## Plans
@@ -243,7 +243,7 @@
   (let [v (clean group-schemas (merge {:title nil} attrs))
         id (db/insert! tx :plan_group (assoc v
                                              :plan_id plan-id
-                                             :order (next-order tx "plan_group" ["plan_id = ?" plan-id])))]
+                                             :rank (next-rank tx "plan_group" ["plan_id = ?" plan-id])))]
     (event/record! tx {:user user :entity-type "plan.group" :entity-id id :plan plan-id
                        :action :create :data {:title (:title v)}})
     (touch-plan! plan-id :structure)
@@ -263,7 +263,7 @@
   "Delete group {:id} and its tasks, logging a :delete event for each. A missing group does nothing."
   [tx user {:keys [id]}]
   (when-let [{pid :plan_id :as old} (fetch-row tx "plan_group" id)]
-    (doseq [t (jdbc/fetch tx ["SELECT id, title FROM plan_task WHERE group_id = ? ORDER BY \"order\", id" id])]
+    (doseq [t (jdbc/fetch tx ["SELECT id, title FROM plan_task WHERE group_id = ? ORDER BY rank, id" id])]
       (event/record! tx {:user user :entity-type "plan.task" :entity-id (:id t) :plan pid
                          :action :delete :data {:title (:title t)}}))
     (event/record! tx {:user user :entity-type "plan.group" :entity-id id :plan pid
@@ -276,7 +276,7 @@
 (defn- move-entity!
   [tx user {:keys [table entity-type scope-sql]} {:keys [id direction]} old]
   (let [pid (:plan_id old)]
-    (when (order/move tx {:table table :scope-sql (scope-sql old) :id id :direction direction})
+    (when (rank/move tx {:table table :scope-sql (scope-sql old) :id id :direction direction})
       (event/record! tx {:user user :entity-type entity-type :entity-id id :plan pid
                          :action :move :data {:direction direction}})
       (touch-plan! pid :structure))
@@ -304,7 +304,7 @@
                        (assoc v
                               :plan_id plan-id
                               :group_id group-id
-                              :order (next-order tx "plan_task" ["plan_id = ? AND group_id IS ?" plan-id group-id])
+                              :rank (next-rank tx "plan_task" ["plan_id = ? AND group_id IS ?" plan-id group-id])
                               :created_at now :created_by (:id user)
                               :updated_at now :updated_by (:id user)))]
     (event/record! tx {:user user :entity-type "plan.task" :entity-id id :plan plan-id
@@ -366,8 +366,8 @@
   or nil."
   [db id]
   (when (db/q1 db ["SELECT id FROM plan WHERE id = ?" id])
-    (let [groups (map row->group (db/q db ["SELECT * FROM plan_group WHERE plan_id = ? ORDER BY \"order\", id" id]))
-          task-ids (update-vals (group-by :group_id (db/q db ["SELECT id, group_id FROM plan_task WHERE plan_id = ? ORDER BY \"order\", id" id]))
+    (let [groups (map row->group (db/q db ["SELECT * FROM plan_group WHERE plan_id = ? ORDER BY rank, id" id]))
+          task-ids (update-vals (group-by :group_id (db/q db ["SELECT id, group_id FROM plan_task WHERE plan_id = ? ORDER BY rank, id" id]))
                                 #(mapv :id %))]
       {:ungrouped (get task-ids nil [])
        :groups (mapv (fn [g] {:group g :task-ids (get task-ids (:plan.group/id g) [])}) groups)})))
@@ -377,9 +377,9 @@
   "{:plan p :ungrouped [tasks] :groups [{:group g :tasks [...]}]} in display order, or nil."
   [db id]
   (when-let [p (db/q1 db ["SELECT * FROM plan WHERE id = ?" id])]
-    (let [groups (map row->group (db/q db ["SELECT * FROM plan_group WHERE plan_id = ? ORDER BY \"order\", id" id]))
+    (let [groups (map row->group (db/q db ["SELECT * FROM plan_group WHERE plan_id = ? ORDER BY rank, id" id]))
           tasks (group-by :plan.task/group
-                          (map row->task (db/q db ["SELECT * FROM plan_task WHERE plan_id = ? ORDER BY \"order\", id" id])))]
+                          (map row->task (db/q db ["SELECT * FROM plan_task WHERE plan_id = ? ORDER BY rank, id" id])))]
       {:plan (row->plan p)
        :ungrouped (vec (get tasks nil))
        :groups (mapv (fn [g] {:group g :tasks (vec (get tasks (:plan.group/id g)))}) groups)})))

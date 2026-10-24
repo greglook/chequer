@@ -1,17 +1,17 @@
-(ns chequer.order
-  "Fractional ordering of sibling rows by a REAL \"order\" column."
+(ns chequer.rank
+  "Fractional ordering of sibling rows by a REAL rank column."
   (:require
     [jdbc.core :as jdbc]))
 
 
-(defn append-order
-  "The order for a row appended after siblings with the given orders."
-  [orders]
-  (inc (reduce max 0 orders)))
+(defn append-rank
+  "The rank for a row appended after siblings with the given ranks."
+  [ranks]
+  (inc (reduce max 0 ranks)))
 
 
 (defn between
-  "The order midway between a and b; a nil neighbour counts as one beyond the other."
+  "The rank midway between a and b; a nil neighbour counts as one beyond the other."
   [a b]
   (cond
     (nil? a) (dec b)
@@ -27,25 +27,25 @@
 
 (defn- siblings
   [tx table [where & params]]
-  (jdbc/fetch tx (into [(str "SELECT id, \"order\" FROM " table " WHERE " where " ORDER BY \"order\", id")]
+  (jdbc/fetch tx (into [(str "SELECT id, rank FROM " table " WHERE " where " ORDER BY rank, id")]
                        params)))
 
 
-(defn- set-order!
-  [tx table id order]
-  (jdbc/execute! tx [(str "UPDATE " table " SET \"order\" = ? WHERE id = ?") order id]))
+(defn- set-rank!
+  [tx table id rank]
+  (jdbc/execute! tx [(str "UPDATE " table " SET rank = ? WHERE id = ?") rank id]))
 
 
 (defn- neighbours
-  "The orders of the two rows the moving row will sit between, or nil if it can't move."
+  "The ranks of the two rows the moving row will sit between, or nil if it can't move."
   [rows id direction]
-  (let [orders (mapv :order rows)
+  (let [ranks (mapv :rank rows)
         i (first (keep-indexed #(when (= id (:id %2)) %1) rows))
         [lo hi] (case direction
                   :up [(- i 2) (- i 1)]
                   :down [(+ i 1) (+ i 2)])]
-    (when (< -1 (if (= :up direction) hi lo) (count orders))
-      [(get orders lo) (get orders hi)])))
+    (when (< -1 (if (= :up direction) hi lo) (count ranks))
+      [(get ranks lo) (get ranks hi)])))
 
 
 (defn move
@@ -57,10 +57,10 @@
         [a b] (neighbours rows id direction)
         rows (if (and a b (needs-renumber? a b))
                (do (doseq [[n row] (map-indexed vector rows)]
-                     (set-order! tx table (:id row) (inc n)))
+                     (set-rank! tx table (:id row) (inc n)))
                    (siblings tx table scope-sql))
                rows)]
     (if-let [[a b] (neighbours rows id direction)]
-      (do (set-order! tx table id (between a b))
+      (do (set-rank! tx table id (between a b))
           true)
       false)))

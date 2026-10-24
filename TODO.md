@@ -11,6 +11,8 @@ A list of miscellaneous items I notice that I want to fix later.
 - Pre-compress the datastar JS file and serve it directly if the request accepts gzip?
 - HoneySQL for SQL formatting? Depends on how things shape up.
 - Adopt `com.amperity/ken` for better observability?
+- Serve a prometheus-style metrics endpoint
+- Rename `cookie_key` config setting to `session_key`
 
 ## Routes
 - Change `/plan-groups/:id/move?dir=up` to pass the direction in the body
@@ -19,11 +21,14 @@ A list of miscellaneous items I notice that I want to fix later.
 ## Bugs
 - Reordering groups doesn't seem to work yet (tasks does)
 
-## Tweaks
+## UI
 - Icons need an emoji picker built in instead of requiring the user to enter one directly
 - "Add Plans" to a list should be a modal view, not a collapsed list on the page
-- Rename 'order' in the code to 'rank'
-- Don't record history for reordering changes
+- Task rows should use a pencil icon for edit, a red trash can for delete, and gripper for drag-n-drop
 - Small circular badges to show task assignees
     - label with first letter of user name
     - generate unique stable color by hashing name
+
+## Ordering
+- Drag and drop reordering
+- Don't record history for reordering changes

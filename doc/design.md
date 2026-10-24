@@ -46,7 +46,7 @@ list never changes that list.
   configured default).
 - **User references** (`created-by`, `updated-by`, etc.) are refs to
   `:user/id`, never to a user's mutable name.
-- **Ordering:** `order` fields are `REAL`. Appending uses `max + 1`; inserting
+- **Ordering:** `rank` fields are `REAL`. Appending uses `max + 1`; inserting
   between two siblings uses their midpoint, so a reorder updates a single row.
   If the gap between neighbours becomes too small to split, the sibling set is
   renumbered `1, 2, 3, ...` in one transaction.
@@ -87,7 +87,7 @@ Plan groups have the following properties:
 
 - `:plan.group/id` (required) opaque unique numeric identifier for the group in storage
 - `:plan.group/plan` (required, ref) the id of the plan this group belongs to
-- `:plan.group/order` (required) a numeric sort ordering for the group within the plan
+- `:plan.group/rank` (required) a numeric sort ordering for the group within the plan
 - `:plan.group/title` (required) a short one-line plain-text title for the group
 - `:plan.group/icon` a custom emoji icon to give the group
 
@@ -104,7 +104,7 @@ Plan tasks have the following properties:
 - `:plan.task/id` (required) opaque unique numeric identifier for the task in storage
 - `:plan.task/plan` (required, ref) the id of the plan this task belongs to
 - `:plan.task/group` (optional, ref) the id of the plan group this task is in, if any; must belong to the same plan
-- `:plan.task/order` (required) a numeric sort ordering for the task within the plan/group
+- `:plan.task/rank` (required) a numeric sort ordering for the task within the plan/group
 - `:plan.task/title` (required) a short one-line plain-text title indicating the task
 - `:plan.task/description` long-form text with a detailed description of the task, with support for markdown formatting
 - `:plan.task/icon` a custom emoji icon to give the task
@@ -151,7 +151,7 @@ List groups have the following properties:
 - `:list.group/id` (required) opaque unique numeric identifier for the group in storage
 - `:list.group/list` (required, ref) the id of the list this group belongs to
 - `:list.group/source` (optional, ref) the plan group this group was created from, if any; cleared if that plan group is deleted
-- `:list.group/order` (required) a numeric sort ordering for the group within the list
+- `:list.group/rank` (required) a numeric sort ordering for the group within the list
 - `:list.group/title` (required) a short one-line plain-text title for the group
 - `:list.group/icon` a custom emoji icon to give the group
 
@@ -170,7 +170,7 @@ Tasks have the following properties:
 - `:task/list` (required, ref) the id of the list this task belongs to
 - `:task/group` (optional, ref) the id of the list group this task is in, if any; must belong to the same list
 - `:task/source` (optional, ref) the plan task this task was created from, if any; cleared if that plan task is deleted
-- `:task/order` (required) a numeric sort ordering for the task within the list/group
+- `:task/rank` (required) a numeric sort ordering for the task within the list/group
 - `:task/title` (required) a short one-line plain-text title indicating the task
 - `:task/description` long-form text with a detailed description of the task, with support for markdown formatting
 - `:task/icon` a custom emoji icon to give the task
