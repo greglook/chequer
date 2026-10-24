@@ -45,11 +45,11 @@
 (defn user-badge
   "A solid circle, colored by the user's name, holding the first letter of their title, with
   the title as its hover text."
-  [{:keys [name title]}]
-  (let [label (if (str/blank? title) name title)]
+  [{:keys [title], user-name :name}]
+  (let [label (if (str/blank? title) user-name title)]
     [:span.user-badge {:title label
                        :aria-label label
-                       :style (str "background-color: hsl(" (name-hue (or name label "")) " 55% 42%)")}
+                       :style (str "background-color: hsl(" (name-hue (or user-name label "")) " 55% 42%)")}
      (if (str/blank? label) "?" (str/upper-case (subs (str/trim label) 0 1)))]))
 
 

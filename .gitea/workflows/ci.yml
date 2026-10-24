@@ -11,7 +11,40 @@ env:
   CLJ_KONDO_VERSION: 2025.01.16
 
 jobs:
+  changes:
+    runs-on: node-26
+    outputs:
+      test: ${{ steps.filter.outputs.test }}
+      style: ${{ steps.filter.outputs.style }}
+      lint: ${{ steps.filter.outputs.lint }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            test:
+              - '.gitea/workflows/ci.yml'
+              - 'deps.edn'
+              - 'bin/test'
+              - 'resources/**'
+              - 'src/**'
+              - 'test/**'
+            style:
+              - '.gitea/workflows/ci.yml'
+              - '.cljstyle'
+              - 'src/**'
+              - 'test/**'
+            lint:
+              - '.gitea/workflows/ci.yml'
+              - '.clj-kondo/**'
+              - 'src/**'
+              - 'test/**'
+
   test:
+    needs: changes
+    if: needs.changes.outputs.test == 'true'
     runs-on: node-26
     steps:
       - uses: actions/checkout@v7
@@ -39,6 +72,8 @@ jobs:
         run: bin/test
 
   style:
+    needs: changes
+    if: needs.changes.outputs.style == 'true'
     runs-on: node-26
     steps:
       - uses: actions/checkout@v7
@@ -56,6 +91,8 @@ jobs:
         run: cljstyle check src test
 
   lint:
+    needs: changes
+    if: needs.changes.outputs.lint == 'true'
     runs-on: node-26
     steps:
       - uses: actions/checkout@v7
