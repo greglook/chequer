@@ -28,7 +28,7 @@
                      "auth.oidc" {"issuer" issuer
                                   "client-id" client-id
                                   "client-secret" "s3cret"
-                                  "cookie-key" (apply str (repeat 32 "a5"))
+                                  "session-key" (apply str (repeat 32 "a5"))
                                   "session-ttl" "1h"}}))
 
 
@@ -279,7 +279,8 @@
 (defn- userinfo-fails?
   "The status of a login whose userinfo endpoint answers with resp, if it starts no session."
   [resp]
-  (with-app identity (constantly resp)
+  (with-app
+    identity (constantly resp)
     (fn [h {:keys [sys] :as ctx}]
       (let [cb (finish-login h (start-login h ctx "/"))]
         (when (and (nil? (session-cookie cb))
@@ -328,14 +329,14 @@
       (is (some? (oidc/unsign k (str payload "." sig) 1000))))))
 
 
-(deftest cookie-key-comes-from-the-config
+(deftest session-key-comes-from-the-config
   (is (= (repeat 32 (unchecked-byte 0xa5))
-         (seq (oidc/cookie-key {:cookie-key (str " " (apply str (repeat 32 "A5")) " ")})))
+         (seq (oidc/session-key {:session-key (str " " (apply str (repeat 32 "A5")) " ")})))
       "hex in either case, trimmed")
-  (is (= 48 (count (oidc/cookie-key {:cookie-key (apply str (repeat 48 "00"))}))) "longer keys are fine")
+  (is (= 48 (count (oidc/session-key {:session-key (apply str (repeat 48 "00"))}))) "longer keys are fine")
   (doseq [bad [nil "" "  " (apply str (repeat 31 "a5")) (apply str (repeat 32 "zz")) "abc"]]
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"cookie-key"
-          (oidc/cookie-key {:cookie-key bad}))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"session-key"
+          (oidc/session-key {:session-key bad}))
         (pr-str bad))))
 
 

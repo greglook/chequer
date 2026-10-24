@@ -3,7 +3,7 @@
   callback, logout and signed-out pages.
 
   The state, nonce, PKCE verifier and return path of a login in progress travel in a
-  short-lived cookie signed with the configured cookie-key. The ID token comes
+  short-lived cookie signed with the configured session-key. The ID token comes
   straight from the token endpoint over TLS, so its claims are checked but its signature
   isn't. Providers such as Authelia keep the ID token minimal and serve profile claims
   from the userinfo endpoint, so those are fetched with the access token and merged in."
@@ -55,28 +55,28 @@
                   :socket-timeout http-timeout-ms}))
 
 
-(def ^:private min-cookie-key-bytes
-  "The shortest cookie-key accepted: a 256-bit key, as HMAC-SHA256 wants."
+(def ^:private min-session-key-bytes
+  "The shortest session-key accepted: a 256-bit key, as HMAC-SHA256 wants."
   32)
 
 
-(defn cookie-key
-  "The key that signs login cookies, decoded from the hex cookie-key of the OIDC config.
+(defn session-key
+  "The key that signs login cookies, decoded from the hex session-key of the OIDC config.
   When it is missing or unusable, log how to generate one and throw."
   [oidc-cfg]
-  (let [hex (some-> (:cookie-key oidc-cfg) str/trim)
+  (let [hex (some-> (:session-key oidc-cfg) str/trim)
         k (crypto/unhex hex)]
-    (if (and k (<= min-cookie-key-bytes (count k)))
+    (if (and k (<= min-session-key-bytes (count k)))
       k
       (let [problem (if (str/blank? hex)
-                      "Missing [auth.oidc] cookie-key"
-                      (str "Invalid [auth.oidc] cookie-key: expected at least " min-cookie-key-bytes
+                      "Missing [auth.oidc] session-key"
+                      (str "Invalid [auth.oidc] session-key: expected at least " min-session-key-bytes
                            " bytes as hex"))]
         (log/error (str problem ". It signs login cookies and is required in oidc mode."
                         " Generate one with:\n\n    openssl rand -hex 32\n\n"
                         "and add it to the configuration file:\n\n"
-                        "    [auth.oidc]\n    cookie-key = <the output>\n"))
-        (throw (ex-info problem {:key :cookie-key}))))))
+                        "    [auth.oidc]\n    session-key = <the output>\n"))
+        (throw (ex-info problem {:key :session-key}))))))
 
 
 (defn- strip-trailing-slash
@@ -85,7 +85,7 @@
 
 
 (defn provider
-  "The OIDC provider for the config cfg. Throws if the config's cookie-key is missing or
+  "The OIDC provider for the config cfg. Throws if the config's session-key is missing or
   unusable. opts may replace :http-get (fn [url] [url {:headers}]) and :http-post
   (fn [url {:headers :form-params}]), which return {:status :body}."
   ([cfg] (provider cfg {}))
@@ -97,7 +97,7 @@
              :scopes (:scopes oidc-cfg)
              :session-ttl-ms (:session-ttl-ms oidc-cfg)
              :redirect-uri (str (strip-trailing-slash (get-in cfg [:server :base-url])) "/auth/callback")
-             :key (cookie-key oidc-cfg)
+             :key (session-key oidc-cfg)
              :http-get http-get
              :http-post http-post
              :discovery (atom nil)}

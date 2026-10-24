@@ -89,7 +89,7 @@
             :oidc {:issuer (get-ini "auth.oidc" "issuer" nil)
                    :client-id (get-ini "auth.oidc" "client-id" nil)
                    :client-secret (get-ini "auth.oidc" "client-secret" nil)
-                   :cookie-key (get-ini "auth.oidc" "cookie-key" nil)
+                   :session-key (get-ini "auth.oidc" "session-key" nil)
                    :scopes (get-ini "auth.oidc" "scopes" "openid profile email")
                    :session-ttl-ms (parse-duration-ms (get-ini "auth.oidc" "session-ttl" "14d"))}}}))
 
@@ -122,9 +122,9 @@
      [:proxy [:map
               (if (= mode :proxy) (required-string :header) (optional-string :header))
               [:trusted-proxies [:vector NonBlank]]]]
-     ;; cookie-key is checked when the OIDC provider starts, which explains how to make one.
+     ;; session-key is checked when the OIDC provider starts, which explains how to make one.
      [:oidc (into [:map
-                   [:cookie-key [:maybe :string]]
+                   [:session-key [:maybe :string]]
                    [:scopes NonBlank]
                    [:session-ttl-ms [:int {:min 1}]]]
                   (map (if (= mode :oidc) required-string optional-string))

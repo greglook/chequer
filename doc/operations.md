@@ -87,7 +87,7 @@ them all with their defaults.
 | `[auth.oidc]`   | `issuer`          | (required in oidc mode)  | Issuer URL, used for discovery. |
 |                 | `client-id`       | (required in oidc mode)  | OIDC client id. |
 |                 | `client-secret`   | (required in oidc mode)  | OIDC client secret. |
-|                 | `cookie-key`      | (required in oidc mode)  | Hex key of at least 32 bytes that signs the login cookie. |
+|                 | `session-key`      | (required in oidc mode)  | Hex key of at least 32 bytes that signs the login cookie. |
 |                 | `scopes`          | `openid profile email`   | Scopes requested at login. |
 |                 | `session-ttl`     | `14d`                    | Session lifetime, as days (`d`), hours (`h`), or minutes (`m`). |
 
@@ -181,7 +181,7 @@ the only thing stored in the browser cookie.
 
 1. Register a confidential client with the provider. Set the redirect URI to
    `<base-url>/auth/callback`.
-2. Generate a cookie key with `openssl rand -hex 32`.
+2. Generate a session key with `openssl rand -hex 32`.
 3. Configure the app:
 
    ```ini
@@ -195,7 +195,7 @@ the only thing stored in the browser cookie.
    issuer = https://sso.example.com/realms/home
    client-id = chequer
    client-secret = ...
-   cookie-key = ...
+   session-key = ...
    ```
 
 The session cookie is `Secure`, so serve the app over HTTPS. Browsers make an
@@ -203,8 +203,8 @@ exception for `http://localhost`. Sessions last for `session-ttl`; expired
 sessions are swept hourly. Logging out deletes the session and closes its open
 pages' live-update streams.
 
-Keep `client-secret` and `cookie-key` private, and make the config file
-readable only by the user running Chequer. Changing `cookie-key` only
+Keep `client-secret` and `session-key` private, and make the config file
+readable only by the user running Chequer. Changing `session-key` only
 invalidates logins in progress, not existing sessions.
 
 

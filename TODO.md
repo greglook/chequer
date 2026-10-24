@@ -12,7 +12,6 @@ A list of miscellaneous items I notice that I want to fix later.
 - HoneySQL for SQL formatting? Depends on how things shape up.
 - Adopt `com.amperity/ken` for better observability?
 - Serve a prometheus-style metrics endpoint
-- Rename `cookie_key` config setting to `session_key`
 
 ## Routes
 - Change `/plan-groups/:id/move?dir=up` to pass the direction in the body

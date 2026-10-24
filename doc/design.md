@@ -361,7 +361,7 @@ The `ini` file has these sections and keys:
 - `[auth.oidc]`
   - `issuer` - issuer URL, used for discovery
   - `client-id`, `client-secret` - client credentials
-  - `cookie-key` - hex key (at least 32 bytes) that signs the login cookie,
+  - `session-key` - hex key (at least 32 bytes) that signs the login cookie,
     e.g. from `openssl rand -hex 32`
   - `scopes` - requested scopes (default `openid profile email`)
   - `session-ttl` - session lifetime
