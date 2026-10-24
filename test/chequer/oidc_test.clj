@@ -59,18 +59,31 @@
 (defn- with-app
   "Call (f handler ctx) with the full app in OIDC mode over a migrated temp database. The
   fake token endpoint answers with the ID token (tweak claims) gives, where claims are valid
-  claims for the nonce of the login in progress. ctx has :sys and :posts, an atom of the
-  requests made to the token endpoint."
+  claims for the nonce of the login in progress. When userinfo is given, the provider has a
+  userinfo endpoint answering with the {:status :body} it returns, and its body is encoded
+  as JSON. ctx has :sys, :posts, an atom of the requests made to the token endpoint, and
+  :userinfo-requests, an atom of those made to the userinfo endpoint."
   ([f] (with-app identity f))
-  ([tweak f]
+  ([tweak f] (with-app tweak nil f))
+  ([tweak userinfo f]
    (helpers/with-test-db
      (fn [d]
        (let [posts (atom [])
+             userinfo-requests (atom [])
              nonce (atom nil)
+             userinfo-url (str issuer "/userinfo")
              provider (oidc/provider cfg
-                                     {:http-get (fn [url]
-                                                  (if (= url (str issuer "/.well-known/openid-configuration"))
-                                                    {:status 200 :body (json/write-str discovery)}
+                                     {:http-get (fn [url & [req]]
+                                                  (cond
+                                                    (= url (str issuer "/.well-known/openid-configuration"))
+                                                    {:status 200 :body (json/write-str (cond-> discovery
+                                                                                         userinfo (assoc "userinfo_endpoint" userinfo-url)))}
+
+                                                    (and userinfo (= url userinfo-url))
+                                                    (do (swap! userinfo-requests conj req)
+                                                        (update (userinfo) :body json/write-str))
+
+                                                    :else
                                                     {:status 404 :body ""}))
                                       :http-post (fn [url req]
                                                    (swap! posts conj (assoc req :url url))
@@ -79,7 +92,7 @@
                                                                            "id_token" (jwt (tweak (valid-claims @nonce)))})})})
              sys {:db d :cfg cfg :live (live/live) :oidc provider}]
          (try
-           (f (core/handler sys) {:sys sys :posts posts :nonce nonce})
+           (f (core/handler sys) {:sys sys :posts posts :userinfo-requests userinfo-requests :nonce nonce})
            (finally
              (live/stop! (:live sys)))))))))
 
@@ -251,6 +264,33 @@
   (is (rejected? #(dissoc % "nonce")) "no nonce")
   (is (rejected? #(assoc % "iss" "https://evil.example")) "wrong issuer")
   (is (not (rejected? #(assoc % "aud" ["other" client-id] "azp" client-id))) "an aud list including us"))
+
+
+(deftest profile-claims-come-from-userinfo
+  (with-app #(dissoc % "preferred_username" "name")
+    (fn [] {:status 200 :body {"sub" "u-123" "preferred_username" "alice" "name" "Alice Liddell"}})
+    (fn [h {:keys [sys userinfo-requests] :as ctx}]
+      (is (= 303 (:status (finish-login h (start-login h ctx "/")))))
+      (is (= [{:headers {"Authorization" "Bearer at"}}] @userinfo-requests) "userinfo is fetched with the access token")
+      (is (= {:subject "https://idp.test|u-123" :name "alice" :title "Alice Liddell"}
+             (select-keys (db/q1 (:db sys) ["SELECT * FROM user"]) [:subject :name :title]))))))
+
+
+(defn- userinfo-fails?
+  "The status of a login whose userinfo endpoint answers with resp, if it starts no session."
+  [resp]
+  (with-app identity (constantly resp)
+    (fn [h {:keys [sys] :as ctx}]
+      (let [cb (finish-login h (start-login h ctx "/"))]
+        (when (and (nil? (session-cookie cb))
+                   (= 0 (count-rows (:db sys) "user")))
+          (:status cb))))))
+
+
+(deftest bad-userinfo-is-rejected
+  (is (= 403 (userinfo-fails? {:status 200 :body {"sub" "someone-else" "preferred_username" "mallory"}}))
+      "another subject")
+  (is (= 502 (userinfo-fails? {:status 401 :body {"error" "invalid_token"}})) "a refused access token"))
 
 
 (deftest claims-error-checks-each-claim

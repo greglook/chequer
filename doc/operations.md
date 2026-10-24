@@ -172,7 +172,10 @@ Chequer acts as an OpenID Connect client, using the authorization code flow
 with PKCE. Users log in through the provider and are created on first login.
 Their handle comes from the `preferred_username` claim, falling back to `sub`.
 Their display name comes from `name`, falling back to the handle. Both are
-refreshed at each login. After login, the server keeps a session whose id is
+refreshed at each login. These claims may come from the ID token or from the
+provider's userinfo endpoint, which Chequer calls with the access token when
+discovery advertises one. Some providers, Authelia among them, only send them
+from userinfo. After login, the server keeps a session whose id is
 the only thing stored in the browser cookie.
 
 1. Register a confidential client with the provider. Set the redirect URI to

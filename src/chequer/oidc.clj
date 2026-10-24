@@ -5,7 +5,8 @@
   The state, nonce, PKCE verifier and return path of a login in progress travel in a
   short-lived cookie signed with the configured cookie-key. The ID token comes
   straight from the token endpoint over TLS, so its claims are checked but its signature
-  isn't."
+  isn't. Providers such as Authelia keep the ID token minimal and serve profile claims
+  from the userinfo endpoint, so those are fetched with the access token and merged in."
   (:require
     [chequer.crypto :as crypto]
     [chequer.sessions :as sessions]
@@ -33,12 +34,14 @@
 
 
 (defn- http-get
-  "GET url from the provider, returning {:status :body}."
-  [url]
-  (http/get url {:accept :json
-                 :throw-exceptions false
-                 :conn-timeout http-timeout-ms
-                 :socket-timeout http-timeout-ms}))
+  "GET url from the provider with headers, returning {:status :body}."
+  ([url] (http-get url {}))
+  ([url {:keys [headers]}]
+   (http/get url {:accept :json
+                  :headers headers
+                  :throw-exceptions false
+                  :conn-timeout http-timeout-ms
+                  :socket-timeout http-timeout-ms})))
 
 
 (defn- http-post
@@ -83,7 +86,7 @@
 
 (defn provider
   "The OIDC provider for the config cfg. Throws if the config's cookie-key is missing or
-  unusable. opts may replace :http-get (fn [url]) and :http-post
+  unusable. opts may replace :http-get (fn [url] [url {:headers}]) and :http-post
   (fn [url {:headers :form-params}]), which return {:status :body}."
   ([cfg] (provider cfg {}))
   ([cfg opts]
@@ -254,8 +257,8 @@
 
 
 (defn- exchange-code
-  "Exchange the authorization code for tokens at the token endpoint and return the ID token.
-  Throws if the endpoint refuses or answers without one."
+  "Exchange the authorization code for tokens at the token endpoint, returning
+  {:id-token :access-token}. Throws if the endpoint refuses or answers without an ID token."
   [{:keys [client-id client-secret redirect-uri] post-fn :http-post} doc code verifier]
   (let [auth-methods (get doc "token_endpoint_auth_methods_supported" ["client_secret_basic"])
         basic? (some #{"client_secret_basic"} auth-methods)
@@ -267,10 +270,24 @@
         {:keys [status body]} (post-fn (get doc "token_endpoint")
                                        {:headers (when basic? {"Authorization" (basic-auth client-id client-secret)})
                                         :form-params form})
-        id-token (when (= 200 status) (get (read-json body) "id_token"))]
+        tokens (when (= 200 status) (read-json body))
+        id-token (get tokens "id_token")]
     (when-not (string? id-token)
       (throw (ex-info (str "Token endpoint refused the code (status " status ")") {:status status :body body})))
-    id-token))
+    {:id-token id-token
+     :access-token (get tokens "access_token")}))
+
+
+(defn- fetch-userinfo
+  "The claims the provider's userinfo endpoint gives for access-token, or nil if the
+  provider has no such endpoint or issued no access token. Throws if the endpoint refuses."
+  [{get-fn :http-get} doc access-token]
+  (when-let [url (and (string? access-token) (get doc "userinfo_endpoint"))]
+    (let [{:keys [status body]} (get-fn url {:headers {"Authorization" (str "Bearer " access-token)}})
+          info (when (= 200 status) (read-json body))]
+      (when-not info
+        (throw (ex-info (str "Userinfo endpoint refused the access token (status " status ")") {:status status})))
+      info)))
 
 
 (defn decode-claims
@@ -303,6 +320,32 @@
       (str/blank? (str (get claims "sub"))) "no subject")))
 
 
+(defn- reject!
+  "Throw to refuse a sign-in whose tokens can't be accepted, for the reason problem."
+  [problem]
+  (throw (ex-info problem {::rejected problem})))
+
+
+(defn- sign-in-claims
+  "The claims of the user signing in with code: those of the ID token, checked against the
+  pending login, with those from the userinfo endpoint merged in. Calls reject! if the
+  tokens can't be accepted, and throws otherwise if the provider fails."
+  [oidc pending code now-ms]
+  (let [doc (discover oidc)
+        {:keys [id-token access-token]} (exchange-code oidc doc code (:verifier pending))
+        claims (or (decode-claims id-token) (reject! "malformed ID token"))]
+    (when-let [problem (claims-error claims {:issuer (:issuer oidc)
+                                             :client-id (:client-id oidc)
+                                             :nonce (:nonce pending)
+                                             :now-ms now-ms})]
+      (reject! problem))
+    (if-let [info (fetch-userinfo oidc doc access-token)]
+      (if (= (str (get claims "sub")) (str (get info "sub")))
+        (merge claims (dissoc info "iss" "aud" "sub"))
+        (reject! "userinfo names another subject"))
+      claims)))
+
+
 (defn- claims->user
   "The user attributes for ID token claims."
   [claims]
@@ -315,8 +358,8 @@
 
 (defn callback
   "GET /auth/callback: finish a login. Check the state against the login cookie, exchange
-  the code, check the ID token's claims, provision the user, start a session and return to
-  where the login began."
+  the code, check the ID token's claims, fetch the userinfo, provision the user, start a
+  session and return to where the login began."
   [{:chequer/keys [db oidc] :as req}]
   (let [now (time/now-ms)
         pending (unsign (:key oidc) (get-in req [:cookies login-cookie :value]) now)
@@ -339,28 +382,22 @@
       (failed 400 "The sign-in provider didn't return a code.")
 
       :else
-      (let [claims (try
-                     (decode-claims (exchange-code oidc (discover oidc) code (:verifier pending)))
+      (let [result (try
+                     {:claims (sign-in-claims oidc pending code now)}
                      (catch Exception e
-                       (log/error (str "OIDC code exchange failed: " (ex-message e)))
-                       ::unavailable))]
-        (if (= ::unavailable claims)
-          (failed 502 "The sign-in provider couldn't complete the sign-in.")
-          (if-let [problem (if claims
-                             (claims-error claims {:issuer (:issuer oidc)
-                                                   :client-id (:client-id oidc)
-                                                   :nonce (:nonce pending)
-                                                   :now-ms now})
-                             "malformed ID token")]
-            (do (log/warn (str "Rejected OIDC ID token: " problem))
-                (failed 403 "The sign-in couldn't be verified."))
-            (let [user (users/ensure-user! db (claims->user claims))
+                       (if-let [problem (::rejected (ex-data e))]
+                         (do (log/warn (str "Rejected OIDC sign-in: " problem))
+                             {:error (failed 403 "The sign-in couldn't be verified.")})
+                         (do (log/error (str "OIDC sign-in failed: " (ex-message e)))
+                             {:error (failed 502 "The sign-in provider couldn't complete the sign-in.")}))))]
+        (or (:error result)
+            (let [user (users/ensure-user! db (claims->user (:claims result)))
                   session (sessions/create-session! db (:id user) (:session-ttl-ms oidc))]
               {:status 303
                :headers {"Location" (safe-path (:next pending))
                          "Cache-Control" "no-store"}
                :cookies {login-cookie (cookie "" "/auth" 0)
-                         sessions/cookie-name (cookie (:session/id session) "/" (quot (:session-ttl-ms oidc) 1000))}})))))))
+                         sessions/cookie-name (cookie (:session/id session) "/" (quot (:session-ttl-ms oidc) 1000))}}))))))
 
 
 ;; ## Logout
