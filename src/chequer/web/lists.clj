@@ -35,9 +35,9 @@
    :users (users/list-users db)})
 
 
-(defn- user-title
+(defn- find-user
   [{:keys [users]} id]
-  (some #(when (= id (:id %)) (:title %)) users))
+  (some #(when (= id (:id %)) %) users))
 
 
 (defn- due-el
@@ -95,9 +95,9 @@
 
 
 (defn render-task
-  "#task-<id>: a checkbox toggling it between pending and completed, its assignee and due
-  date, a menu of the other states, its history and deletion, its description and an
-  inline edit form."
+  "#task-<id>: a checkbox toggling it between pending and completed, its due date, its
+  assignee's badge beside the controls, a menu of the other states, its history and
+  deletion, its description and an inline edit form."
   [t v]
   (let [id (:task/id t)
         path (str "/tasks/" id)
@@ -112,8 +112,8 @@
       (when (#{:working :abandoned} state)
         [:span.badge {:class (name state)} (name state)])
       (when-let [e (:task/estimate t)] [:span.estimate (str e " min")])
-      (when-let [a (:task/assignee t)] [:span.assignee (user-title v a)])
       (due-el (:task/due-at t) (lists/overdue? t (:now v)) v)
+      (some->> (:task/assignee t) (find-user v) web/user-badge)
       [:span.controls
        (edit-icon-button signal)
        (move-buttons path)

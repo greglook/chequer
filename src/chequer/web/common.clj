@@ -31,6 +31,28 @@
   (select-keys req [:chequer/db :chequer/live]))
 
 
+;; ## User badges
+
+(defn- name-hue
+  "A hue in [0, 360) from a 32-bit FNV-1a hash of s, so a name always gets the same color."
+  [s]
+  (mod (reduce (fn [h c] (mod (* (bit-xor h (int c)) 16777619) 4294967296))
+               2166136261
+               s)
+       360))
+
+
+(defn user-badge
+  "A solid circle, colored by the user's name, holding the first letter of their title, with
+  the title as its hover text."
+  [{:keys [name title]}]
+  (let [label (if (str/blank? title) name title)]
+    [:span.user-badge {:title label
+                       :aria-label label
+                       :style (str "background-color: hsl(" (name-hue (or name label "")) " 55% 42%)")}
+     (if (str/blank? label) "?" (str/upper-case (subs (str/trim label) 0 1)))]))
+
+
 ;; ## Responses
 
 (defn redirect-el

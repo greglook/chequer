@@ -2,6 +2,7 @@
   "The page shell shared by every full-page response, and the viewer's time zone."
   (:require
     [chequer.time :as time]
+    [chequer.web.common :as web]
     [clojure.string :as str]
     [jolt.datastar.html :as h]))
 
@@ -89,7 +90,8 @@ function toggleTheme() {
             [:nav
              [:a.brand {:href "/"} "Chequer"]
              [:div.links (map #(nav-link (:uri req) %) sections)]
-             [:span.user (get-in req [:chequer/user :title])]
+             (when-let [user (:chequer/user req)]
+               [:span.user (web/user-badge user) [:span.name (:title user)]])
              (when (:chequer/session req)
                [:form.sign-out {:method "post" :action "/auth/logout"}
                 [:button {:type "submit"} "Sign out"]])

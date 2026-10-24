@@ -18,15 +18,9 @@ A list of miscellaneous items I notice that I want to fix later.
 - Should the `/plan-groups/:id` route be `/plans/:plan/groups/:id` instead?
 
 ## UI
-- Icons need an emoji picker built in instead of requiring the user to enter one directly
 - "Add Plans" to a list should be a modal view, not a collapsed list on the page
-- Small circular badges to show task assignees
-    - label with first letter of user name
-    - generate unique stable color by hashing name
-
-## Ordering
 - Drag and drop reordering
-- Don't record history for reordering changes
+- Instead of just expanding description, tap task row to expand with all info in a card
 
 ## Bugs
 - ...
