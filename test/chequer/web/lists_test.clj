@@ -85,7 +85,7 @@
       (let [r (request h :get "/lists/new")]
         (is (= 200 (:status r)))
         (is (str/includes? (:body r) "action=\"/lists\""))
-        (is (str/includes? (:body r) "type=\"datetime-local\"")))
+        (is (str/includes? (:body r) "type=\"date\"")))
       (let [r (request h :post "/lists" {:signals {:title "  Groceries " :icon "🛒" :due ""}})
             row (db/q1 (:db sys) ["SELECT * FROM list"])]
         (is (= 303 (:status r)))
@@ -214,19 +214,19 @@
     (fn [h sys]
       (let [lid (create-list! h "L")
             ny "America/New_York"]
-        (is (ok? (request h :post (str "/lists/" lid "/tasks") {:signals {:title "x" :due "2026-03-01T09:30"} :tz ny})))
+        (is (ok? (request h :post (str "/lists/" lid "/tasks") {:signals {:title "x" :due "2026-03-01"} :tz ny})))
         (let [[t] (task-ids sys)]
-          (is (= 1772375400000 (:due_at (db/q1 (:db sys) ["SELECT due_at FROM task WHERE id = ?" t])))
-              "09:30 in New York is 14:30 UTC")
-          (is (str/includes? (:body (request h :get (str "/lists/" lid) {:tz ny})) "value=\"2026-03-01T09:30\""))
-          (is (str/includes? (:body (request h :get (str "/lists/" lid) {:tz "UTC"})) "value=\"2026-03-01T14:30\""))
+          (is (= 1772427599999 (:due_at (db/q1 (:db sys) ["SELECT due_at FROM task WHERE id = ?" t])))
+              "the end of the day in New York is 05:00 UTC the next day")
+          (is (str/includes? (:body (request h :get (str "/lists/" lid) {:tz ny})) "value=\"2026-03-01\""))
+          (is (str/includes? (:body (request h :get (str "/lists/" lid) {:tz "UTC"})) "value=\"2026-03-02\""))
           (let [r (request h :put (str "/tasks/" t) {:signals {:due "next tuesday"} :tz ny})]
             (is (str/includes? (:body r) (str "id=\"task-" t "-errors\"")))
-            (is (str/includes? (:body r) "Due must be a date and time")))
+            (is (str/includes? (:body r) "Due must be a date")))
           (is (ok? (request h :put (str "/tasks/" t) {:signals {:due ""}})))
           (is (nil? (:due_at (db/q1 (:db sys) ["SELECT due_at FROM task WHERE id = ?" t])))))
-        (is (ok? (request h :put (str "/lists/" lid) {:signals {:due "2026-03-01T09:30"} :tz ny})))
-        (is (= 1772375400000 (:due_at (db/q1 (:db sys) ["SELECT due_at FROM list WHERE id = ?" lid]))))))))
+        (is (ok? (request h :put (str "/lists/" lid) {:signals {:due "2026-03-01"} :tz ny})))
+        (is (= 1772427599999 (:due_at (db/q1 (:db sys) ["SELECT due_at FROM list WHERE id = ?" lid]))))))))
 
 
 (deftest overdue-tasks-are-badged
@@ -234,10 +234,10 @@
     (fn [h sys]
       (let [lid (create-list! h "L")]
         (binding [time/*now-ms* (constantly 1772375400000)]
-          (request h :post (str "/lists/" lid "/tasks") {:signals {:title "late" :due "2026-02-28T09:30"} :tz "UTC"})
+          (request h :post (str "/lists/" lid "/tasks") {:signals {:title "late" :due "2026-02-28"} :tz "UTC"})
           (let [body (:body (request h :get (str "/lists/" lid)))]
             (is (str/includes? body "overdue"))
-            (is (str/includes? body "due 1 day ago")))
+            (is (str/includes? body "due 14 hours ago")))
           (request h :post (str "/tasks/" (first (task-ids sys)) "/state?to=completed"))
           (is (not (str/includes? (:body (request h :get (str "/lists/" lid))) "overdue"))))))))
 

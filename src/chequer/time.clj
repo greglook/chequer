@@ -4,6 +4,7 @@
     [tick.core :as t])
   (:import
     (java.time
+      LocalDate
       ZoneId)))
 
 
@@ -56,20 +57,27 @@
       :else (str "in " n " " unit (when (> n 1) "s")))))
 
 
-(def ^:private input-formatter
-  (t/formatter "yyyy-MM-dd'T'HH:mm"))
+(def ^:private date-formatter
+  (t/formatter "EEE d MMM yyyy"))
 
 
-(defn parse-local-input
-  "Epoch milliseconds for the value s of a datetime-local input (\"2026-03-01T09:30\", seconds
-  optional) read in time zone tz, or nil if s isn't one."
+(defn format-date
+  "Format the date of epoch milliseconds ms in time zone tz, e.g. \"Mon 3 Mar 2025\"."
+  [ms tz]
+  (t/format date-formatter (t/in (t/instant ms) tz)))
+
+
+(defn parse-date-input
+  "Epoch milliseconds for the end of the day named by the value s of a date input
+  (\"2026-03-01\") in time zone tz, i.e. the last millisecond before the next day starts, or
+  nil if s isn't one."
   [s tz]
   (try
-    (inst-ms (t/instant (t/in (t/date-time s) tz)))
+    (-> (LocalDate/parse s) (.plusDays 1) (.atStartOfDay (ZoneId/of tz)) .toInstant .toEpochMilli dec)
     (catch Exception _ nil)))
 
 
-(defn format-local-input
-  "The datetime-local input value for epoch milliseconds ms in time zone tz."
+(defn format-date-input
+  "The date input value for the day of epoch milliseconds ms in time zone tz."
   [ms tz]
-  (t/format input-formatter (t/in (t/instant ms) tz)))
+  (str (t/date (t/in (t/instant ms) tz))))

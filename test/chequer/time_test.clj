@@ -61,10 +61,13 @@
   (is (= "in 1 day" (time/relative (+ 1000 day) 1000)) "exactly a day"))
 
 
-(deftest local-inputs-round-trip-in-the-zone
+(deftest date-inputs-round-trip-in-the-zone
   ;; 2026-03-01 is before the US switch to daylight time, so New York is UTC-5.
-  (is (= 1772375400000 (time/parse-local-input "2026-03-01T09:30" "America/New_York")))
-  (is (= 1772375400000 (time/parse-local-input "2026-03-01T14:30:00" "UTC")))
-  (is (= "2026-03-01T09:30" (time/format-local-input 1772375400000 "America/New_York")))
-  (is (nil? (time/parse-local-input "tomorrow" "UTC")))
-  (is (nil? (time/parse-local-input "" "UTC"))))
+  (is (= 1772427599999 (time/parse-date-input "2026-03-01" "America/New_York")) "the end of the day")
+  (is (= 1772409599999 (time/parse-date-input "2026-03-01" "UTC")))
+  (is (= "2026-03-01" (time/format-date-input 1772427599999 "America/New_York")))
+  (is (= "2026-03-02" (time/format-date-input 1772427599999 "UTC")))
+  (is (= "Sun 1 Mar 2026" (time/format-date 1772427599999 "America/New_York")))
+  (is (nil? (time/parse-date-input "2026-03-01T09:30" "UTC")))
+  (is (nil? (time/parse-date-input "tomorrow" "UTC")))
+  (is (nil? (time/parse-date-input "" "UTC"))))

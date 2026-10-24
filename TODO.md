@@ -18,7 +18,6 @@ A list of miscellaneous items I notice that I want to fix later.
 
 ## Bugs
 - Reordering groups doesn't seem to work yet (tasks does)
-- Date input has a picker but requires a time entry right now
 
 ## Tweaks
 - Icons need an emoji picker built in instead of requiring the user to enter one directly

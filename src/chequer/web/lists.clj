@@ -39,17 +39,17 @@
 
 
 (defn- due-el
-  "The due date relative to now, with the full date in the viewer's zone as its title."
+  "The due date relative to now, with the date in the viewer's zone as its title."
   [due-at overdue? {:keys [now tz]}]
   (when due-at
-    [:span.due {:title (time/format-instant due-at tz)}
+    [:span.due {:title (time/format-date due-at tz)}
      (str "due " (time/relative due-at now))
      (when overdue? [:span.badge.overdue "overdue"])]))
 
 
 (defn- due-field
   [due-at {:keys [tz]}]
-  (field "Due" "due" (some-> due-at (time/format-local-input tz)) {:type "datetime-local"}))
+  (field "Due" "due" (some-> due-at (time/format-date-input tz)) {:type "date"}))
 
 
 (defn- closed-count
@@ -404,7 +404,7 @@
                               [:form {:method "post" :action "/lists" :data-on:submit (action "post" "/lists")}
                                (field "Title" "title" nil {:required true :autofocus true})
                                (field "Icon" "icon" nil {:size 4})
-                               (field "Due" "due" nil {:type "datetime-local"})
+                               (field "Due" "due" nil {:type "date"})
                                [:label "Description" [:textarea {:name "description" :rows 4}]]
                                (plan-picker (plans/list-plans db)
                                             (some-> (web/query-param req "plan") parse-long vector))
@@ -432,14 +432,14 @@
 ;; ## Mutations
 
 (defn- due-attrs
-  "{:due_at ms} from the body's datetime-local :due, read in the viewer's zone; {} without one."
+  "{:due_at ms} from the body's date :due, the end of that day in the viewer's zone; {} without one."
   [body req]
   (if (contains? body :due)
     (let [s (str/trim (or (:due body) ""))]
       (if (str/blank? s)
         {:due_at nil}
-        {:due_at (or (time/parse-local-input s (layout/viewer-tz req))
-                     (web/invalid! {:due "must be a date and time"}))}))
+        {:due_at (or (time/parse-date-input s (layout/viewer-tz req))
+                     (web/invalid! {:due "must be a date"}))}))
     {}))
 
 
