@@ -68,6 +68,17 @@
          (describe :update "plan.task" {:estimate [nil 5] :description [nil "x"]})))
   (is (= "greg changed the due date of task Pack charger and renamed it to Pack cable"
          (describe :update "task" {:due_at [nil 1] :title ["Pack charger" "Pack cable"]})))
+  (is (= "greg assigned task Pack charger to Sam"
+         (describe :update "task" {:assignee_id [nil 2] :assignee [nil "Sam"]})))
+  (is (= "greg unassigned task Pack charger"
+         (describe :update "task" {:assignee_id [2 nil] :assignee ["Sam" nil]})))
+  (is (= "greg renamed task Pack charger → Pack cable and assigned it to Sam"
+         (describe :update "task" {:title ["Pack charger" "Pack cable"] :assignee_id [1 2] :assignee ["Greg" "Sam"]})))
+  (is (= "greg changed the due date of task Pack charger, renamed it to Pack cable and assigned it to Sam"
+         (describe :update "task" {:due_at [nil 1] :title ["Pack charger" "Pack cable"]
+                                   :assignee_id [nil 2] :assignee [nil "Sam"]})))
+  (is (= "greg changed the assignee of task Pack charger" (describe :update "task" {:assignee_id [nil 2]}))
+      "events from before assignee titles were recorded")
   (is (= "greg moved task Pack charger up" (describe :move "task" {:direction :up})))
   (is (= "greg archived list Pack charger" (describe :archive "list" nil)))
   (is (= "greg added plan Packing: 12 tasks, 3 skipped"

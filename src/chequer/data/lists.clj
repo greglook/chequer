@@ -102,9 +102,10 @@
 
 
 (defn- update-entity!
-  "Apply the validated attrs to row id of table, recording an :update event with the diff.
-  Returns the changes. Writes nothing when no value changes."
-  [tx user {:keys [table schemas entity-type list-id-of part-of stamped?]} {:keys [id] :as attrs}]
+  "Apply the validated attrs to row id of table, recording an :update event with the diff,
+  merged with (annotate tx changes) when given. Returns the changes. Writes nothing when no
+  value changes."
+  [tx user {:keys [table schemas entity-type list-id-of part-of stamped? annotate]} {:keys [id] :as attrs}]
   (let [old (plans/fetch-existing tx table id)
         v (plans/clean schemas attrs)
         changes (event/diff old v (keys v))
@@ -112,7 +113,7 @@
     (when (seq changes)
       (plans/update-row! tx table id (cond-> (update-vals changes second)
                                        stamped? (assoc :updated_at (time/now-ms) :updated_by (:id user))))
-      (record! tx user entity-type id lid :update changes)
+      (record! tx user entity-type id lid :update (cond-> changes annotate (merge (annotate tx changes))))
       (touch-list! lid (part-of old)))
     changes))
 
@@ -255,11 +256,21 @@
     id))
 
 
+(defn- assignee-titles
+  "{:assignee [old-title new-title]} naming the users of an :assignee_id change, nil for
+  unassigned; {} when the assignee didn't change."
+  [tx {ids :assignee_id}]
+  (if ids
+    {:assignee (mapv #(some->> % (plans/fetch-row tx "user") :title) ids)}
+    {}))
+
+
 (defn update-task!
   "Update the given keys of {:id :title :description :icon :estimate :due_at :assignee_id}."
   [tx user attrs]
   (update-entity! tx user {:table "task" :schemas task-schemas :entity-type "task"
-                           :list-id-of :list_id :part-of :id :stamped? true}
+                           :list-id-of :list_id :part-of :id :stamped? true
+                           :annotate assignee-titles}
                   attrs)
   nil)
 

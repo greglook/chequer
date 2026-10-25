@@ -194,7 +194,8 @@
         (is (= [{:entity_type "list.group" :entity_id g1 :list_id lid :action "update"
                  :data {:title ["G1" "Clothes"] :icon [nil "👕"]}}
                 {:entity_type "task" :entity_id a :list_id lid :action "update"
-                 :data {:title ["a" "a2"] :estimate [nil 5] :due_at [nil 9000] :assignee_id [nil (:id u)]}}]
+                 :data {:title ["a" "a2"] :estimate [nil 5] :due_at [nil 9000] :assignee_id [nil (:id u)]
+                        :assignee [nil (:title u)]}}]
                (subvec (events d) before)))))))
 
 

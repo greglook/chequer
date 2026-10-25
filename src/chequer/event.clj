@@ -128,21 +128,43 @@
    :assignee_id "assignee"})
 
 
+(defn- join-clauses
+  "Clauses joined as \"a\", \"a and b\" or \"a, b and c\"."
+  [clauses]
+  (if (< (count clauses) 3)
+    (str/join " and " clauses)
+    (str (str/join ", " (butlast clauses)) " and " (last clauses))))
+
+
 (defn- describe-update
-  "The predicate of an :update event's sentence, from its changes, or nil when it has none."
+  "The predicate of an :update event's sentence, from its changes, or nil when it has none.
+  An :assignee change of [old-title new-title] names who the task was assigned to; older
+  events with only :assignee_id fall back to \"changed the assignee\"."
   [kind title changes]
   (let [[old-title new-title] (:title changes)
-        others (keep field-names (keys (dissoc changes :title)))]
+        [_ assignee :as assignment] (:assignee changes)
+        others (keep field-names (keys (cond-> (dissoc changes :title)
+                                         assignment (dissoc :assignee_id))))
+        clauses (cond-> []
+                  (seq others)
+                  (conj (str "changed the " (str/join ", " (sort others)) " of " kind " " title))
+
+                  (:title changes)
+                  (conj (if (seq others)
+                          (str "renamed it to " new-title)
+                          (str "renamed " kind " " old-title " → " new-title)))
+
+                  assignment
+                  (conj (let [target (if (or (seq others) (:title changes)) "it" (str kind " " title))]
+                          (if assignee
+                            (str "assigned " target " to " assignee)
+                            (str "unassigned " target)))))]
     (cond
       (= [:state] (keys changes))
       (str "reset " title " to pending")
 
-      (and (:title changes) (empty? others))
-      (str "renamed " kind " " old-title " → " new-title)
-
-      (seq others)
-      (str "changed the " (str/join ", " (sort others)) " of " kind " " title
-           (when (:title changes) (str " and renamed it to " new-title))))))
+      (seq clauses)
+      (join-clauses clauses))))
 
 
 (defn- describe-add-plan
