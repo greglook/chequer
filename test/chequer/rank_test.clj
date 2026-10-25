@@ -76,3 +76,51 @@
         (is (= (if (even? i) ["a" "c" "b"] ["a" "b" "c"]) (names d 1))))
       (let [ranks (map :rank (db/q d ["SELECT rank FROM thing WHERE scope = 1"]))]
         (is (apply distinct? ranks) "without renumbering, the halved gaps would collapse")))))
+
+
+(defn- place!
+  [d id scope before]
+  (db/with-tx [tx d]
+    (rank/place tx {:table "thing" :scope-sql ["scope = ?" scope] :id id :before before})
+    (jdbc/execute! tx ["UPDATE thing SET scope = ? WHERE id = ?" scope id])))
+
+
+(deftest place-puts-a-row-before-another-or-last
+  (with-things
+    (fn [d]
+      (place! d 3 1 1)
+      (is (= ["c" "a" "b"] (names d 1)))
+      (place! d 3 1 nil)
+      (is (= ["a" "b" "c"] (names d 1)))
+      (place! d 1 1 3)
+      (is (= ["b" "a" "c"] (names d 1))))))
+
+
+(deftest place-moves-a-row-into-another-scope
+  (with-things
+    (fn [d]
+      (place! d 2 2 4)
+      (is (= ["a" "c"] (names d 1)))
+      (is (= ["b" "x"] (names d 2)))
+      (place! d 1 3 nil)
+      (is (= ["a"] (names d 3)) "an empty scope takes the row"))))
+
+
+(deftest place-before-a-row-outside-the-scope-is-a-bad-request
+  (with-things
+    (fn [d]
+      (is (= :chequer/bad-request
+             (:type (ex-data (try (place! d 1 1 4) (catch Exception e e))))))
+      (is (= :chequer/bad-request
+             (:type (ex-data (try (place! d 1 1 1) (catch Exception e e)))))
+          "a row can't be placed before itself"))))
+
+
+(deftest repeated-places-renumber-the-siblings
+  (with-things
+    (fn [d]
+      (dotimes [i 120]
+        (place! d (if (even? i) 3 2) 1 (if (even? i) 2 3))
+        (is (= (if (even? i) ["a" "c" "b"] ["a" "b" "c"]) (names d 1))))
+      (let [ranks (map :rank (db/q d ["SELECT rank FROM thing WHERE scope = 1"]))]
+        (is (apply distinct? ranks))))))

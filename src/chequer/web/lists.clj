@@ -105,8 +105,9 @@
         state (:task/state t)
         signal (toggle-signal "Task" id)
         description (:task/description t)]
-    [:li.task (merge {:id el-id :class (name state)} (web/expandable el-id signal))
+    [:li.task (merge {:id el-id :class (name state)} (web/expandable el-id signal) (web/draggable id path))
      [:div.row (web/expand-row-attrs el-id)
+      web/drag-grip
       [:input {:type "checkbox" :title "Done" :checked (= :completed state)
                :data-on:change (str "@post('" path "/state?to=' + (el.checked ? 'completed' : 'pending'))")}]
       [:span.icon (:task/icon t)]
@@ -118,7 +119,6 @@
       (some->> (:task/assignee t) (find-user v) web/user-badge)
       [:span.controls
        (edit-icon-button signal)
-       (move-buttons path)
        (more-menu
          (for [s [:skipped :pending]
                :when (not= s state)]
@@ -187,8 +187,8 @@
 
 
 (defn- task-list
-  [src list-id task-ids v]
-  [:ul.tasks (map #(vector task-view src list-id % v) task-ids)])
+  [src list-id group-id task-ids v]
+  [:ul.tasks (web/task-list-attrs group-id) (map #(vector task-view src list-id % v) task-ids)])
 
 
 (defn- render-group
@@ -198,7 +198,7 @@
   (let [id (:list.group/id group)]
     [:section.list-group (web/collapsible (str "list-group-" id))
      [render-group-header group (count task-ids)]
-     (task-list src list-id task-ids v)
+     (task-list src list-id id task-ids v)
      [new-task-form list-id id]]))
 
 
@@ -260,7 +260,7 @@
   @(live/cell live [:list list-id :structure])
   (if-let [{:keys [ungrouped groups]} (lists/load-list-structure db list-id)]
     (list [header-view src list-id v]
-          (task-list src list-id ungrouped v)
+          (task-list src list-id nil ungrouped v)
           [new-task-form list-id nil]
           (map #(vector render-group src list-id % v) groups)
           [:form.new-group {:data-on:submit (str (action "post" (str "/lists/" list-id "/groups")) "; el.reset()")}
@@ -573,9 +573,9 @@
 
 
 (defn move-task
-  "POST /tasks/:id/move?dir=up|down."
+  "POST /tasks/:id/move?group=<id>&before=<id>."
   [req]
-  (web/move req lists/move-task!))
+  (web/place req lists/place-task!))
 
 
 (def ^:private states-by-name

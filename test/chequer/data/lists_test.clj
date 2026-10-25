@@ -172,16 +172,21 @@
 (deftest moving-groups-and-tasks-changes-display-order
   (with-user
     (fn [d u]
-      (let [{:keys [lid g1 b]} (seed d u)
+      (let [{:keys [lid g1 a b c]} (seed d u)
             g2 (:result (tx! d #(lists/create-group! % u {:list-id lid :title "G2"})))
             d2 (:result (tx! d #(lists/create-task! % u {:list-id lid :group-id g2 :title "d"})))
             before (count (events d))]
         (is (= #{[:list lid] [:list lid :structure]} (:topics (tx! d #(lists/move-group! % u {:id g2 :direction :up})))))
-        (tx! d #(lists/move-task! % u {:id b :direction :up}))
-        (tx! d #(lists/move-task! % u {:id d2 :direction :down}))
+        (is (= #{[:list lid] [:list lid :structure]} (:topics (tx! d #(lists/place-task! % u {:id b :group-id g1 :before a})))))
+        (tx! d #(lists/place-task! % u {:id d2 :group-id g2 :before nil}))
         (is (= [["c"] [["G2" ["d"]] ["G1" ["b" "a"]]]] (shape (lists/load-list d lid))))
-        (is (= before (count (events d))) "reordering records no events")
-        (is (= g1 (:group_id (db/q1 d ["SELECT group_id FROM task WHERE id = ?" b]))))))))
+        (is (= g1 (:group_id (db/q1 d ["SELECT group_id FROM task WHERE id = ?" b]))))
+        (tx! d #(lists/place-task! % u {:id a :group-id g2 :before d2}))
+        (tx! d #(lists/place-task! % u {:id c :group-id g1 :before nil}))
+        (tx! d #(lists/place-task! % u {:id b :group-id nil :before nil}))
+        (is (= [["b"] [["G2" ["a" "d"]] ["G1" ["c"]]]] (shape (lists/load-list d lid)))
+            "placing a task in another group, or none, moves it there")
+        (is (= before (count (events d))) "reordering records no events")))))
 
 
 (deftest updating-groups-and-tasks-records-diffs
@@ -241,7 +246,7 @@
                  #(lists/update-group! % u {:id 99 :title "x"})
                  #(lists/update-task! % u {:id 99 :title "x"})
                  #(lists/set-state! % u {:id 99 :state :completed})
-                 #(lists/move-task! % u {:id 99 :direction :up})
+                 #(lists/place-task! % u {:id 99 :group-id nil :before nil})
                  #(lists/create-group! % u {:list-id 99 :title "x"})
                  #(lists/create-task! % u {:list-id 99 :title "x"})]]
         (is (= :chequer/not-found

@@ -336,12 +336,29 @@
   nil)
 
 
-(defn move-plan-task!
-  "Move plan task {:id} one place in {:direction :up|:down} among the tasks of its group."
-  [tx _user {:keys [id] :as attrs}]
-  (move-entity! tx {:table "plan_task"
-                    :scope-sql (fn [t] ["plan_id = ? AND group_id IS ?" (:plan_id t) (:group_id t)])}
-                attrs (fetch-existing tx "plan_task" id)))
+(defn place-in-group!
+  "Move task {:id} of table into group :group-id (nil for none) of the same plan or list,
+  named by its parent-col, just before task :before of that group (or last, when nil).
+  Returns the task's row as it was. Reordering records no event."
+  [tx {:keys [table group-table parent-col]} {:keys [id group-id before]}]
+  (let [old (fetch-existing tx table id)]
+    (when group-id
+      (fetch-existing tx group-table group-id))
+    (rank/place tx {:table table
+                    :scope-sql [(str (name parent-col) " = ? AND group_id IS ?") (get old parent-col) group-id]
+                    :id id :before before})
+    (when (not= group-id (:group_id old))
+      (update-row! tx table id {:group_id group-id}))
+    old))
+
+
+(defn place-plan-task!
+  "Move plan task {:id} into group :group-id (nil for none) of its plan, just before task
+  :before of that group (or last, when nil)."
+  [tx _user attrs]
+  (let [{pid :plan_id} (place-in-group! tx {:table "plan_task" :group-table "plan_group" :parent-col :plan_id} attrs)]
+    (touch-plan! pid :structure))
+  nil)
 
 
 ;; ## Reads

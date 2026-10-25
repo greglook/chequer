@@ -215,15 +215,21 @@
             ok? #(= 204 (:status %))]
         (is (ok? (request h :post (str "/plans/" pid "/groups") {:title "G1"})))
         (is (ok? (request h :post (str "/plans/" pid "/groups") {:title "G2"})))
-        (let [[g1 g2] (map :id (db/q d ["SELECT id FROM plan_group ORDER BY \"order\""]))]
+        (let [[g1 g2] (map :id (db/q d ["SELECT id FROM plan_group ORDER BY rank, id"]))]
           (is (ok? (request h :post (str "/plans/" pid "/tasks") {:title "a" :group (str g1)})))
           (is (ok? (request h :post (str "/plans/" pid "/tasks") {:title "b" :group (str g1)})))
-          (let [[a b] (map :id (db/q d ["SELECT id FROM plan_task ORDER BY \"order\""]))]
+          (let [[a b] (map :id (db/q d ["SELECT id FROM plan_task ORDER BY rank, id"]))]
             (is (ok? (request h :post (str "/plan-groups/" g2 "/move?dir=up"))))
-            (is (= [g2 g1] (map :id (db/q d ["SELECT id FROM plan_group ORDER BY \"order\""]))))
-            (is (ok? (request h :post (str "/plan-tasks/" b "/move?dir=up"))))
-            (is (= [b a] (map :id (db/q d ["SELECT id FROM plan_task ORDER BY \"order\""]))))
-            (is (= 400 (:status (request h :post (str "/plan-tasks/" b "/move?dir=sideways")))))
+            (is (= [g2 g1] (map :id (db/q d ["SELECT id FROM plan_group ORDER BY rank, id"]))))
+            (is (ok? (request h :post (str "/plan-tasks/" b "/move?group=" g1 "&before=" a))))
+            (is (= [b a] (map :id (db/q d ["SELECT id FROM plan_task ORDER BY rank, id"]))))
+            (is (ok? (request h :post (str "/plan-tasks/" b "/move?group=" g2 "&before="))))
+            (is (= {:group_id g2} (db/q1 d ["SELECT group_id FROM plan_task WHERE id = ?" b])))
+            (is (ok? (request h :post (str "/plan-tasks/" b "/move?group="))))
+            (is (= {:group_id nil} (db/q1 d ["SELECT group_id FROM plan_task WHERE id = ?" b])))
+            (is (= 400 (:status (request h :post (str "/plan-tasks/" b "/move?group=" g1 "&before=" b)))))
+            (is (= 400 (:status (request h :post (str "/plan-tasks/" b "/move?group=x")))))
+            (is (= 404 (:status (request h :post (str "/plan-tasks/" b "/move?group=999")))))
             (is (ok? (request h :put (str "/plan-groups/" g1) {:title "Clothes" :icon ""})))
             (is (ok? (request h :put (str "/plan-tasks/" a) {:title "a2" :description "d" :icon "" :estimate "3"})))
             (is (= {:title "a2" :description "d" :estimate 3}

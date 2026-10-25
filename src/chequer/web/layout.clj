@@ -84,6 +84,7 @@ function toggleTheme() {
            [:script (h/raw theme-script)]
            [:link {:rel "stylesheet" :href "/css/app.css"}]
            [:script {:type "module" :src "/js/datastar.js"}]
+           [:script {:src "/js/drag.js" :defer true}]
            [:script (h/raw tz-script)]]
           [:body
            [:header.site

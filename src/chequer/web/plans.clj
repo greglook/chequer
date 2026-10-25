@@ -34,14 +34,14 @@
         signal (toggle-signal "Task" id)
         errors (str "plan-task-" id "-errors")
         description (:plan.task/description t)]
-    [:li.plan-task (merge {:id el-id} (web/expandable el-id signal))
+    [:li.plan-task (merge {:id el-id} (web/expandable el-id signal) (web/draggable id path))
      [:div.row (web/expand-row-attrs el-id)
+      web/drag-grip
       [:span.icon (:plan.task/icon t)]
       (web/expand-title el-id (:plan.task/title t) description)
       (when-let [e (:plan.task/estimate t)] [:span.estimate (str e " min")])
       [:span.controls
        (edit-icon-button signal)
-       (move-buttons path)
        (more-menu (delete-menu-item "Delete this task?" path))]]
      (web/expanded-card el-id signal
                         [["Estimate" (some-> (:plan.task/estimate t) (str " min"))]]
@@ -91,8 +91,8 @@
 
 
 (defn- task-list
-  [src plan-id task-ids]
-  [:ul.plan-tasks (map #(vector plan-task-view src plan-id %) task-ids)])
+  [src plan-id group-id task-ids]
+  [:ul.plan-tasks (web/task-list-attrs group-id) (map #(vector plan-task-view src plan-id %) task-ids)])
 
 
 (defn- render-group
@@ -102,7 +102,7 @@
   (let [id (:plan.group/id group)]
     [:section.plan-group (web/collapsible (str "plan-group-" id))
      [render-group-header group (count task-ids)]
-     (task-list src plan-id task-ids)
+     (task-list src plan-id id task-ids)
      [new-task-form plan-id id]]))
 
 
@@ -144,7 +144,7 @@
   @(live/cell live [:plan plan-id :structure])
   (if-let [{:keys [ungrouped groups]} (plans/load-plan-structure db plan-id)]
     (list [header-view src plan-id]
-          (task-list src plan-id ungrouped)
+          (task-list src plan-id nil ungrouped)
           [new-task-form plan-id nil]
           (map #(vector render-group src plan-id %) groups)
           [:form.new-group {:data-on:submit (str (action "post" (str "/plans/" plan-id "/groups")) "; el.reset()")}
@@ -296,9 +296,9 @@
 
 
 (defn move-task
-  "POST /plan-tasks/:id/move?dir=up|down."
+  "POST /plan-tasks/:id/move?group=<id>&before=<id>."
   [req]
-  (web/move req plans/move-plan-task!))
+  (web/place req plans/place-plan-task!))
 
 
 (def routes

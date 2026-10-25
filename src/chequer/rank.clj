@@ -64,3 +64,34 @@
       (do (set-rank! tx table id (between a b))
           true)
       false)))
+
+
+(defn- slot
+  "The ranks of the rows a row placed just before row before (or last, when nil) sits
+  between, given its new siblings, or nil when before isn't one of them."
+  [rows before]
+  (let [i (if before
+            (first (keep-indexed #(when (= before (:id %2)) %1) rows))
+            (count rows))]
+    (when i
+      [(:rank (get rows (dec i))) (:rank (get rows i))])))
+
+
+(defn place
+  "Give row id of table the rank that puts it just before row before (or last, when before
+  is nil) among the rows matching scope-sql ([where-clause & params]), which needn't include
+  it yet; the caller moves it into that scope. Renumbers the siblings 1..n first when the
+  gap is too small to split. Throws ex-info {:type :chequer/bad-request} when before isn't
+  one of those rows."
+  [tx {:keys [table scope-sql id before]}]
+  (let [others #(filterv (fn [row] (not= id (:id row))) (siblings tx table scope-sql))
+        rows (others)
+        [a b] (or (slot rows before)
+                  (throw (ex-info (str "No sibling " before) {:type :chequer/bad-request})))
+        rows (if (and a b (needs-renumber? a b))
+               (do (doseq [[n row] (map-indexed vector rows)]
+                     (set-rank! tx table (:id row) (inc n)))
+                   (others))
+               rows)
+        [a b] (slot rows before)]
+    (set-rank! tx table id (if (or a b) (between a b) 1))))

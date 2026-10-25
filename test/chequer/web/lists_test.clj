@@ -204,8 +204,8 @@
         (is (= 400 (:status (request h :post (str "/tasks/" a "/state?to=working")))))
         (is (= 400 (:status (request h :post (str "/tasks/" a "/state?to=done")))))
         (is (= 404 (:status (request h :post "/tasks/999/state?to=completed"))))
-        (is (ok? (request h :post (str "/tasks/" b "/move?dir=up"))))
-        (is (= [b a] (map :id (db/q (:db sys) ["SELECT id FROM task ORDER BY \"order\""]))))))))
+        (is (ok? (request h :post (str "/tasks/" b "/move?before=" a))))
+        (is (= [b a] (map :id (db/q (:db sys) ["SELECT id FROM task ORDER BY rank, id"]))))))))
 
 
 (deftest due-dates-are-read-in-the-viewers-zone
@@ -332,11 +332,11 @@
             lid (create-list! h "L")]
         (is (ok? (request h :post (str "/lists/" lid "/groups") {:signals {:title "G1"}})))
         (is (ok? (request h :post (str "/lists/" lid "/groups") {:signals {:title "G2"}})))
-        (let [[g1 g2] (map :id (db/q d ["SELECT id FROM list_group ORDER BY \"order\""]))]
+        (let [[g1 g2] (map :id (db/q d ["SELECT id FROM list_group ORDER BY rank, id"]))]
           (is (ok? (request h :post (str "/lists/" lid "/tasks") {:signals {:title "a" :group (str g1)}})))
           (is (= g1 (:group_id (db/q1 d ["SELECT group_id FROM task"]))))
           (is (ok? (request h :post (str "/list-groups/" g2 "/move?dir=up"))))
-          (is (= [g2 g1] (map :id (db/q d ["SELECT id FROM list_group ORDER BY \"order\""]))))
+          (is (= [g2 g1] (map :id (db/q d ["SELECT id FROM list_group ORDER BY rank, id"]))))
           (is (ok? (request h :put (str "/list-groups/" g1) {:signals {:title "Clothes" :icon ""}})))
           (is (= "Clothes" (:title (db/q1 d ["SELECT title FROM list_group WHERE id = ?" g1]))))
           (let [r (request h :post (str "/lists/" lid "/tasks") {:signals {:title " " :group (str g1)}})]

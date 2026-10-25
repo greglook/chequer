@@ -124,11 +124,16 @@
 (deftest moving-groups-and-tasks-changes-display-order
   (with-user
     (fn [d u]
-      (let [{:keys [pid g2 b dd]} (seed d u)]
+      (let [{:keys [pid g1 g2 a b c dd]} (seed d u)]
         (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/move-group! % u {:id g2 :direction :up})))))
-        (tx! d #(plans/move-plan-task! % u {:id b :direction :up}))
-        (tx! d #(plans/move-plan-task! % u {:id dd :direction :down}))
+        (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/place-plan-task! % u {:id b :group-id g1 :before a})))))
+        (tx! d #(plans/place-plan-task! % u {:id dd :group-id g2 :before nil}))
         (is (= [["c"] [["G2" ["d"]] ["G1" ["b" "a"]]]] (shape (plans/load-plan d pid))))
+        (tx! d #(plans/place-plan-task! % u {:id a :group-id g2 :before dd}))
+        (tx! d #(plans/place-plan-task! % u {:id c :group-id g1 :before nil}))
+        (tx! d #(plans/place-plan-task! % u {:id b :group-id nil :before nil}))
+        (is (= [["b"] [["G2" ["a" "d"]] ["G1" ["c"]]]] (shape (plans/load-plan d pid)))
+            "placing a task in another group, or none, moves it there")
         (is (= (repeat 7 "create") (mapv :action (events d)))
             "reordering records no events")))))
 
@@ -178,7 +183,10 @@
       (let [{:keys [g1]} (seed d u)
             other (:result (tx! d #(plans/create-plan! % u {:title "Other"})))]
         (is (thrown-with-msg? Exception #"group belongs to another plan"
-              (tx! d #(plans/create-plan-task! % u {:plan-id other :group-id g1 :title "x"}))))))))
+              (tx! d #(plans/create-plan-task! % u {:plan-id other :group-id g1 :title "x"}))))
+        (let [x (:result (tx! d #(plans/create-plan-task! % u {:plan-id other :title "x"})))]
+          (is (thrown-with-msg? Exception #"group belongs to another plan"
+                (tx! d #(plans/place-plan-task! % u {:id x :group-id g1 :before nil})))))))))
 
 
 (deftest missing-entities-are-not-found
@@ -188,6 +196,7 @@
                  #(plans/update-group! % u {:id 99 :title "x"})
                  #(plans/update-plan-task! % u {:id 99 :title "x"})
                  #(plans/move-group! % u {:id 99 :direction :up})
+                 #(plans/place-plan-task! % u {:id 99 :group-id nil :before nil})
                  #(plans/create-group! % u {:plan-id 99 :title "x"})]]
         (is (= :chequer/not-found
                (:type (ex-data (try (tx! d f) (catch Exception e e))))))))))

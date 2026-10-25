@@ -285,12 +285,13 @@
   nil)
 
 
-(defn move-task!
-  "Move task {:id} one place in {:direction :up|:down} among the tasks of its group."
-  [tx _user {:keys [id] :as attrs}]
-  (move-entity! tx {:table "task"
-                    :scope-sql (fn [t] ["list_id = ? AND group_id IS ?" (:list_id t) (:group_id t)])}
-                attrs (plans/fetch-existing tx "task" id)))
+(defn place-task!
+  "Move task {:id} into group :group-id (nil for none) of its list, just before task
+  :before of that group (or last, when nil)."
+  [tx _user attrs]
+  (let [{lid :list_id} (plans/place-in-group! tx {:table "task" :group-table "list_group" :parent-col :list_id} attrs)]
+    (touch-list! lid :structure))
+  nil)
 
 
 ;; ## States

@@ -360,7 +360,7 @@
   "Attributes of a task's row that expand the task element-id on a click outside its
   controls and checkbox, or collapse it if it's already expanded."
   [element-id]
-  {:data-on:click (str "evt.target.closest('.controls, input, a') || "
+  {:data-on:click (str "evt.target.closest('.controls, .grip, input, a') || "
                        "($_expandedTask = $_expandedTask === '" element-id "' ? '' : '" element-id "')")})
 
 
@@ -392,6 +392,36 @@
   [path]
   (list [:button {:type "button" :title "Move up" :data-on:click (str "@post('" path "/move?dir=up')")} "↑"]
         [:button {:type "button" :title "Move down" :data-on:click (str "@post('" path "/move?dir=down')")} "↓"]))
+
+
+;; ## Dragging tasks
+
+(def ^:private grip-icon
+  (raw (str "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
+            "<circle cx=\"9\" cy=\"6\" r=\"1.5\"/><circle cx=\"15\" cy=\"6\" r=\"1.5\"/>"
+            "<circle cx=\"9\" cy=\"12\" r=\"1.5\"/><circle cx=\"15\" cy=\"12\" r=\"1.5\"/>"
+            "<circle cx=\"9\" cy=\"18\" r=\"1.5\"/><circle cx=\"15\" cy=\"18\" r=\"1.5\"/></svg>")))
+
+
+(defn task-list-attrs
+  "The attributes of a list of tasks that public/js/drag.js lets tasks be dragged within and
+  between: group-id is the group the list holds, nil for the ungrouped tasks."
+  [group-id]
+  {:data-task-list "" :data-group (str group-id)})
+
+
+(defn draggable
+  "The attributes of the root element of task id, at path, that send where drag.js dropped it
+  to path's move route."
+  [id path]
+  {:data-task-id (str id)
+   :data-on:task-drop (str "@post('" path "/move?group=' + evt.detail.group + '&before=' + evt.detail.before)")})
+
+
+(def drag-grip
+  "The handle a task is dragged by, or moved with the arrow keys once focused."
+  [:button.grip {:type "button" :title "Drag to move" :aria-label "Move task (drag, or press the arrow keys)"}
+   grip-icon])
 
 
 ;; ## Mutations
@@ -445,3 +475,13 @@
   (if-let [direction ({"up" :up "down" :down} (query-param req "dir"))]
     (mutate req nil (fn [tx user _] (move-fn tx user {:id (get-in req [:params :id]) :direction direction})))
     (text-response 400 "Bad request")))
+
+
+(defn place
+  "POST .../move?group=<id>&before=<id>, placing the task with (place-fn tx user {:id
+  :group-id :before}); a blank group means ungrouped and a blank before means last."
+  [req place-fn]
+  (mutate req nil (fn [tx user _]
+                    (place-fn tx user {:id (get-in req [:params :id])
+                                       :group-id (parse-id (query-param req "group"))
+                                       :before (parse-id (query-param req "before"))}))))
