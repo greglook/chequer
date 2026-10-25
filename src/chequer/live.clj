@@ -9,10 +9,85 @@
   (:require
     [clojure.core.async :as async]
     [glimmer.ratom :as ratom]
+    [jolt.datastar.cache :as cache]
     [jolt.datastar.core :as ds])
   (:import
     (java.io
-      StringReader)))
+      StringReader)
+    (java.util.concurrent
+      ConcurrentHashMap)))
+
+
+;; ## Cache guard
+;;
+;; glimmer-datastar's component cache records the values of the cells a component read
+;; after the component has rendered, not when it read them. If a topic is touched while a
+;; component is rendering, after it has loaded its data but before it is admitted, the entry
+;; holds HTML from before the change as current for the revision after it, and nothing
+;; re-renders it. The guard refuses to admit an entry if any topic was touched while it
+;; rendered; the render is still served, and the next one recomputes it.
+
+(def ^:private epoch
+  "Counts touches, so a render can tell whether one happened while it ran."
+  (atom 0))
+
+
+(def ^:private starts
+  "Per render thread, the stack of epochs at the lookups whose outcome isn't known yet."
+  (ConcurrentHashMap.))
+
+
+(def ^:private pending
+  "Per render thread, the epoch at the lookup of the component about to be admitted."
+  (ConcurrentHashMap.))
+
+
+(defn- push-start!
+  [t e]
+  (.put starts t (conj (or (.get starts t) []) e)))
+
+
+(defn- pop-start!
+  "The epoch last pushed on thread t, or nil."
+  [t]
+  (when-let [stack (.get starts t)]
+    (if (<= (count stack) 1)
+      (.remove starts t)
+      (.put starts t (pop stack)))
+    (peek stack)))
+
+
+(def ^:private guard-installed
+  (atom false))
+
+
+(defn- install-cache-guard!
+  "Wrap the component cache's lookup, record! and admit! with the guard, once."
+  []
+  (when (compare-and-set! guard-installed false true)
+    (let [lookup cache/lookup
+          record! cache/record!
+          admit! cache/admit!]
+      ;; a lookup precedes the render of a component, and record! follows it, before admit!
+      (alter-var-root #'cache/lookup
+                      (fn [_]
+                        (fn [c k]
+                          (push-start! (Thread/currentThread) @epoch)
+                          (lookup c k))))
+      (alter-var-root #'cache/record!
+                      (fn [_]
+                        (fn [c what]
+                          (let [t (Thread/currentThread)
+                                start (pop-start! t)]
+                            (when (and start (not= :hits what))
+                              (.put pending t start)))
+                          (record! c what))))
+      (alter-var-root #'cache/admit!
+                      (fn [_]
+                        (fn [c k e]
+                          (let [start (.remove pending (Thread/currentThread))]
+                            (and (or (nil? start) (= start @epoch))
+                                 (admit! c k e)))))))))
 
 
 (def ^:private default-heartbeat-ms
@@ -30,6 +105,7 @@
   Options: :heartbeat-ms, how long a stream may be quiet before it gets a heartbeat."
   ([] (live {}))
   ([{:keys [heartbeat-ms] :or {heartbeat-ms default-heartbeat-ms}}]
+   (install-cache-guard!)
    {:cells (atom {})
     :scheduler (ds/scheduler)
     :streams (atom 0)
@@ -55,7 +131,8 @@
   (doseq [topic topics
           :let [c (get @(:cells l) topic)]
           :when c]
-    (swap! c inc)))
+    (swap! c inc))
+  (swap! epoch inc))
 
 
 (defn stream-count

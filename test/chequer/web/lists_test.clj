@@ -451,3 +451,33 @@
       (let [pid (make-plan! sys (owner h sys) "Packing" [])]
         (is (str/includes? (:body (request h :get (str "/plans/" pid)))
                            (str "href=\"/lists/new?plan=" pid "\"")))))))
+
+
+(deftest a-group-added-while-a-render-runs-still-reaches-the-stream
+  (with-app
+    (fn [h _sys]
+      (let [lid (create-list! h "Trip")
+            _ (request h :post (str "/lists/" lid "/tasks") {:signals {:title "Passport"}})
+            ch (:body (request h :get (str "/lists/" lid "?datastar-sse=true&datastar-selector=%23live")))
+            load-structure lists/load-list-structure
+            inside (promise)
+            release (promise)
+            first-call (atom true)]
+        (try
+          (take-frame ch)
+          (with-redefs [lists/load-list-structure
+                        (fn [db id]
+                          (let [structure (load-structure db id)]
+                            (when (compare-and-set! first-call true false)
+                              (deliver inside true)
+                              @release)
+                            structure))]
+            (request h :post (str "/lists/" lid "/groups") {:signals {:title "First"}})
+            (is (deref inside 3000 nil) "the render is held after reading the first group")
+            (request h :post (str "/lists/" lid "/groups") {:signals {:title "Second"}})
+            (deliver release true)
+            (let [frames (str (take-frame ch) (take-frame ch))]
+              (is (str/includes? frames "First"))
+              (is (str/includes? frames "Second") "the render that missed the group isn't cached")))
+          (finally
+            (async/close! ch)))))))
