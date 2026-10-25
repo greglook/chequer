@@ -34,7 +34,7 @@
 
 
 (def states
-  #{:pending :working :completed :abandoned})
+  #{:pending :completed :skipped})
 
 
 ;; ## Rows
@@ -81,7 +81,6 @@
    :task/created-by (:created_by r)
    :task/updated-at (:updated_at r)
    :task/updated-by (:updated_by r)
-   :task/started-at (:started_at r)
    :task/ended-at (:ended_at r)
    :task/ended-by (:ended_by r)})
 
@@ -286,14 +285,11 @@
 ;; ## States
 
 (defn state-transition
-  "The state columns of task row after user moves it to new-state at now."
-  [task new-state user now]
-  (let [started (:started_at task)]
-    (case new-state
-      :pending {:state "pending" :started_at nil :ended_at nil :ended_by nil}
-      :working {:state "working" :started_at (or started now) :ended_at nil :ended_by nil}
-      (:completed :abandoned) {:state (name new-state) :started_at (or started now)
-                               :ended_at now :ended_by (:id user)})))
+  "The state columns of a task after user moves it to new-state at now."
+  [new-state user now]
+  (case new-state
+    :pending {:state "pending" :ended_at nil :ended_by nil}
+    (:completed :skipped) {:state (name new-state) :ended_at now :ended_by (:id user)}))
 
 
 (defn set-state!
@@ -301,11 +297,11 @@
   [tx user {:keys [id state]}]
   (when-not (states state)
     (throw (ex-info "Invalid attributes" {:type :chequer/invalid :errors {:state "is not a task state"}})))
-  (let [{old-state :state lid :list_id :as old} (plans/fetch-existing tx "task" id)]
+  (let [{old-state :state lid :list_id} (plans/fetch-existing tx "task" id)]
     (when (not= old-state (name state))
-      (plans/update-row! tx "task" id (assoc (state-transition old state user (time/now-ms))
+      (plans/update-row! tx "task" id (assoc (state-transition state user (time/now-ms))
                                              :updated_at (time/now-ms) :updated_by (:id user)))
-      (record! tx user "task" id lid (case state :completed :complete :abandoned :abandon :update)
+      (record! tx user "task" id lid (case state :completed :complete :skipped :skip :update)
                {:state [old-state (name state)]})
       (touch-list! lid :header id))
     nil))
@@ -315,17 +311,17 @@
 
 (defn- open?
   [task]
-  (contains? #{:pending :working} (:task/state task)))
+  (= :pending (:task/state task)))
 
 
 (defn list-done?
-  "True when tasks is non-empty and none are pending or working."
+  "True when tasks is non-empty and none are pending."
   [tasks]
   (boolean (and (seq tasks) (not-any? open? tasks))))
 
 
 (defn overdue?
-  "True when task is past its due-at and still pending or working."
+  "True when task is past its due-at and still pending."
   [task now]
   (boolean (and (open? task) (some-> (:task/due-at task) (< now)))))
 

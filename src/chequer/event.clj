@@ -134,11 +134,8 @@
   (let [[old-title new-title] (:title changes)
         others (keep field-names (keys (dissoc changes :title)))]
     (cond
-      (and (= [:state] (keys changes)) (= "pending" (second (:state changes))))
-      (str "reset " title " to pending")
-
       (= [:state] (keys changes))
-      (str "started working on " title)
+      (str "reset " title " to pending")
 
       (and (:title changes) (empty? others))
       (str "renamed " kind " " old-title " → " new-title)
@@ -166,7 +163,7 @@
                     :delete (str "deleted " kind " " title)
                     :update (describe-update kind title data)
                     :complete (str "completed " title)
-                    :abandon (str "abandoned " title)
+                    :skip (str "skipped " title)
                     :move (some->> (:direction data) name (str "moved " kind " " title " "))
                     :archive (str "archived " kind " " title)
                     :unarchive (str "unarchived " kind " " title)

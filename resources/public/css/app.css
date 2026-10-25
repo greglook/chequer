@@ -739,7 +739,7 @@ ul.errors:empty {
   color: var(--success);
 }
 
-.badge.working {
+.badge.skipped {
   background: var(--info-soft);
   color: var(--info);
 }
@@ -877,14 +877,14 @@ ul.plan-tasks:empty {
 }
 
 .task.completed .title,
-.task.abandoned .title {
+.task.skipped .title {
   text-decoration: line-through;
   text-decoration-color: var(--muted);
   color: var(--muted);
 }
 
 .task.completed .icon,
-.task.abandoned .icon {
+.task.skipped .icon {
   opacity: 0.6;
 }
 

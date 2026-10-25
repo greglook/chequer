@@ -56,7 +56,7 @@
 
 (defn- closed-count
   [counts]
-  (+ (:completed counts 0) (:abandoned counts 0)))
+  (+ (:completed counts 0) (:skipped counts 0)))
 
 
 (defn- list-due
@@ -70,8 +70,7 @@
 
 (def ^:private state-actions
   {:pending "Reset to pending"
-   :working "Start working"
-   :abandoned "Abandon"})
+   :skipped "Skip"})
 
 
 (defn- state-url
@@ -112,7 +111,7 @@
                :data-on:change (str "@post('" path "/state?to=' + (el.checked ? 'completed' : 'pending'))")}]
       [:span.icon (:task/icon t)]
       (web/expand-title el-id (:task/title t) description)
-      (when (#{:working :abandoned} state)
+      (when (= :skipped state)
         [:span.badge {:class (name state)} (name state)])
       (when-let [e (:task/estimate t)] [:span.estimate (str e " min")])
       (due-el (:task/due-at t) (lists/overdue? t (:now v)) v)
@@ -121,7 +120,7 @@
        (edit-icon-button signal)
        (move-buttons path)
        (more-menu
-         (for [s [:working :abandoned :pending]
+         (for [s [:skipped :pending]
                :when (not= s state)]
            [:button {:type "button" :data-on:click (str "@post('" (state-url id s) "')")} (state-actions s)])
          [:a {:href (str path "/history")} "History"]
@@ -584,7 +583,7 @@
 
 
 (defn set-task-state
-  "POST /tasks/:id/state?to=pending|working|completed|abandoned."
+  "POST /tasks/:id/state?to=pending|completed|skipped."
   [req]
   (if-let [state (states-by-name (web/query-param req "to"))]
     (mutate req nil (fn [tx user _] (lists/set-state! tx user {:id (by-id req) :state state})))

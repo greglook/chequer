@@ -50,19 +50,11 @@
 
 (deftest state-transition-applies-the-design-timestamp-rules
   (let [user {:id 7}
-        t (fn [state started ended by] {:state state :started_at started :ended_at ended :ended_by by})
-        go (fn [task to] (lists/state-transition task to user 100))]
-    (testing "to pending clears everything, from every state"
-      (doseq [from [(t "pending" nil nil nil) (t "working" 50 nil nil) (t "completed" 50 80 7) (t "abandoned" 100 100 7)]]
-        (is (= (t "pending" nil nil nil) (go from :pending)))))
-    (testing "to working sets started-at only when unset, and clears the end"
-      (is (= (t "working" 100 nil nil) (go (t "pending" nil nil nil) :working)))
-      (is (= (t "working" 50 nil nil) (go (t "working" 50 nil nil) :working)) "working again leaves started-at")
-      (is (= (t "working" 50 nil nil) (go (t "completed" 50 80 7) :working))))
-    (testing "to completed or abandoned stamps the end, and starts the task if it never started"
-      (is (= (t "completed" 100 100 7) (go (t "pending" nil nil nil) :completed)))
-      (is (= (t "abandoned" 50 100 7) (go (t "working" 50 nil nil) :abandoned)))
-      (is (= (t "completed" 50 100 7) (go (t "abandoned" 50 80 3) :completed))))))
+        t (fn [state ended by] {:state state :ended_at ended :ended_by by})
+        go #(lists/state-transition % user 100)]
+    (is (= (t "pending" nil nil) (go :pending)) "to pending clears the end")
+    (is (= (t "completed" 100 7) (go :completed)) "to completed stamps the end")
+    (is (= (t "skipped" 100 7) (go :skipped)) "to skipped stamps the end")))
 
 
 (deftest set-state-writes-columns-topics-and-events
@@ -71,20 +63,18 @@
       (let [{:keys [lid a]} (seed d u)
             before (count (events d))]
         (is (= #{[:list lid] [:list lid :header] [:list lid :task a]} (:topics (tx! d #(lists/set-state! % u {:id a :state :completed})))))
-        (is (= {:state "completed" :started_at 1000 :ended_at 1000 :ended_by (:id u)}
-               (select-keys (db/q1 d ["SELECT * FROM task WHERE id = ?" a]) [:state :started_at :ended_at :ended_by])))
+        (is (= {:state "completed" :ended_at 1000 :ended_by (:id u)}
+               (select-keys (db/q1 d ["SELECT * FROM task WHERE id = ?" a]) [:state :ended_at :ended_by])))
         (testing "undo back to pending"
           (tx! d #(lists/set-state! % u {:id a :state :pending}))
-          (is (= {:state "pending" :started_at nil :ended_at nil :ended_by nil}
-                 (select-keys (db/q1 d ["SELECT * FROM task WHERE id = ?" a]) [:state :started_at :ended_at :ended_by]))))
-        (tx! d #(lists/set-state! % u {:id a :state :working}))
-        (tx! d #(lists/set-state! % u {:id a :state :abandoned}))
+          (is (= {:state "pending" :ended_at nil :ended_by nil}
+                 (select-keys (db/q1 d ["SELECT * FROM task WHERE id = ?" a]) [:state :ended_at :ended_by]))))
+        (tx! d #(lists/set-state! % u {:id a :state :skipped}))
         (testing "setting the state it already has writes nothing"
-          (is (= #{} (:topics (tx! d #(lists/set-state! % u {:id a :state :abandoned}))))))
+          (is (= #{} (:topics (tx! d #(lists/set-state! % u {:id a :state :skipped}))))))
         (is (= [["complete" {:state ["pending" "completed"]}]
                 ["update" {:state ["completed" "pending"]}]
-                ["update" {:state ["pending" "working"]}]
-                ["abandon" {:state ["working" "abandoned"]}]]
+                ["skip" {:state ["pending" "skipped"]}]]
                (mapv (juxt :action :data) (subvec (events d) before))))
         (is (every? #(= lid (:list_id %)) (subvec (events d) before)))))))
 
@@ -102,11 +92,10 @@
     (testing "a list is done when it has tasks and none are open"
       (is (false? (lists/list-done? [])))
       (is (false? (lists/list-done? [(task :completed nil) (task :pending nil)])))
-      (is (false? (lists/list-done? [(task :working nil)])))
-      (is (true? (lists/list-done? [(task :completed nil) (task :abandoned nil)]))))
+      (is (true? (lists/list-done? [(task :completed nil) (task :skipped nil)]))))
     (testing "overdue means past due and still open"
       (is (true? (lists/overdue? (task :pending 99) 100)))
-      (is (true? (lists/overdue? (task :working 99) 100)))
+      (is (false? (lists/overdue? (task :skipped 99) 100)))
       (is (false? (lists/overdue? (task :pending 100) 100)) "due exactly now is not yet overdue")
       (is (false? (lists/overdue? (task :pending nil) 100)))
       (is (false? (lists/overdue? (task :completed 99) 100))))))
@@ -271,13 +260,13 @@
         (tx! d #(lists/update-task! % u {:id a :due_at 7000}))
         (tx! d #(lists/update-task! % u {:id b :due_at 3000}))
         (tx! d #(lists/set-state! % u {:id b :state :completed}))
-        (tx! d #(lists/set-state! % u {:id c :state :working}))
+        (tx! d #(lists/set-state! % u {:id c :state :skipped}))
         (tx! d #(lists/archive-list! % u {:id done-id}))
         (let [by-id (into {} (map (juxt (comp :list/id :list) identity)) (lists/list-summary d))]
-          (is (= {:counts {:pending 1 :working 1 :completed 1 :abandoned 0} :done? false :next-due 7000}
+          (is (= {:counts {:pending 1 :completed 1 :skipped 1} :done? false :next-due 7000}
                  (select-keys (by-id lid) [:counts :done? :next-due]))
               "a completed task's due date is not the next due")
-          (is (= {:counts {:pending 0 :working 0 :completed 0 :abandoned 0} :done? false :next-due nil}
+          (is (= {:counts {:pending 0 :completed 0 :skipped 0} :done? false :next-due nil}
                  (select-keys (by-id empty-id) [:counts :done? :next-due])))
           (is (= {:done? true :next-due nil} (select-keys (by-id done-id) [:done? :next-due])))
           (is (= 1000 (:list/archived-at (:list (by-id done-id))))

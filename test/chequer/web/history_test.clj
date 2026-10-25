@@ -59,8 +59,7 @@
 
 (deftest describe-event-sentences
   (is (= "greg completed Pack charger" (describe :complete "task" {:state ["pending" "completed"]})))
-  (is (= "greg abandoned Pack charger" (describe :abandon "task" {:state ["working" "abandoned"]})))
-  (is (= "greg started working on Pack charger" (describe :update "task" {:state ["pending" "working"]})))
+  (is (= "greg skipped Pack charger" (describe :skip "task" {:state ["pending" "skipped"]})))
   (is (= "greg reset Pack charger to pending" (describe :update "task" {:state ["completed" "pending"]})))
   (is (= "greg created task Pack charger" (describe :create "plan.task" {:title "Pack charger"})))
   (is (= "greg deleted task Pack charger" (describe :delete "task" {:title "Pack charger"})))

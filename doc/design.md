@@ -133,7 +133,7 @@ Lists have the following properties:
 - `:list/updated-by` (required, ref) the user who last modified the list
 
 A list is _done_ when it has at least one task and none of its tasks are
-`:pending` or `:working`. This is derived and not stored.
+`:pending`. This is derived and not stored.
 
 Archiving is a manual action that hides the list from the main view. Archived
 lists remain readable, searchable, and editable, and may be unarchived (which
@@ -177,17 +177,15 @@ Tasks have the following properties:
 - `:task/estimate` an estimated duration in minutes the task will take, if applicable
 - `:task/due-at` instant by which the task should be finished, if any
 - `:task/assignee` (optional, ref) the user the task is assigned to, if any
-- `:task/state` (required) state enumeration, one of `:pending`, `:working`, `:completed`, or `:abandoned`
+- `:task/state` (required) state enumeration, one of `:pending`, `:completed`, or `:skipped`
 - `:task/created-at` (required) instant the task was created
 - `:task/created-by` (required, ref) the user who created the task
 - `:task/updated-at` (required) instant the task was last modified
 - `:task/updated-by` (required, ref) the user who last modified the task
-- `:task/started-at` instant work began on the task, if it has started
-- `:task/ended-at` instant work ended on the task, if it has ended
-- `:task/ended-by` (ref) the user who completed or abandoned the task, if it has ended
+- `:task/ended-at` instant the task was completed or skipped, if it has ended
+- `:task/ended-by` (ref) the user who completed or skipped the task, if it has ended
 
-A task is _overdue_ when its `due-at` has passed and its state is `:pending` or
-`:working`.
+A task is _overdue_ when its `due-at` has passed and its state is `:pending`.
 
 The assignee is informational only. It is never changed automatically, and
 assignment sends no notifications. The UI offers an "assigned to me" filter.
@@ -197,13 +195,9 @@ assignment sends no notifications. The UI offers an "assigned to me" filter.
 A task may move from any state to any other state, so that accidental checks
 are easy to undo. Changing state applies these timestamp rules:
 
-- **→ `:pending`**: clear `started-at`, `ended-at`, and `ended-by`.
-- **→ `:working`**: set `started-at` to now if it is unset; clear `ended-at`
-  and `ended-by`.
-- **→ `:completed` or `:abandoned`**: set `ended-at` to now and `ended-by` to
-  the acting user; if `started-at` is unset, set it to the same instant.
-
-Any number of tasks may be `:working` at the same time.
+- **→ `:pending`**: clear `ended-at` and `ended-by`.
+- **→ `:completed` or `:skipped`**: set `ended-at` to now and `ended-by` to
+  the acting user.
 
 
 ### User
@@ -270,7 +264,7 @@ Events have the following properties:
 - `:event/entity-id` (required) the numeric identifier of the entity acted upon
 - `:event/plan` (optional) the id of the plan the entity belongs to, for plan-side events
 - `:event/list` (optional) the id of the list the entity belongs to, for list-side events
-- `:event/action` (required) a keyword denoting the action taken, e.g. `:create`, `:update`, `:delete`, `:complete`, `:abandon`, `:add-plan`, `:archive`, etc.
+- `:event/action` (required) a keyword denoting the action taken, e.g. `:create`, `:update`, `:delete`, `:complete`, `:skip`, `:add-plan`, `:archive`, etc.
 - `:event/data` EDN map of structured details, e.g. changed fields with old and new values, or the plan added
 - `:event/message` a longer message describing what action took place
 

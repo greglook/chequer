@@ -199,10 +199,9 @@
             _ (request h :post (str "/lists/" lid "/tasks") {:signals {:title "b"}})
             [a b] (task-ids sys)
             state #(:state (db/q1 (:db sys) ["SELECT state FROM task WHERE id = ?" %]))]
-        (is (ok? (request h :post (str "/tasks/" a "/state?to=working"))))
-        (is (= "working" (state a)))
-        (is (ok? (request h :post (str "/tasks/" a "/state?to=abandoned"))))
-        (is (= "abandoned" (state a)))
+        (is (ok? (request h :post (str "/tasks/" a "/state?to=skipped"))))
+        (is (= "skipped" (state a)))
+        (is (= 400 (:status (request h :post (str "/tasks/" a "/state?to=working")))))
         (is (= 400 (:status (request h :post (str "/tasks/" a "/state?to=done")))))
         (is (= 404 (:status (request h :post "/tasks/999/state?to=completed"))))
         (is (ok? (request h :post (str "/tasks/" b "/move?dir=up"))))
