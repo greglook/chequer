@@ -1273,12 +1273,6 @@ ol.results {
     justify-content: flex-end;
   }
 
-  /* The state menu sits toward the left of its line here, so open it rightwards. */
-  .menu-items {
-    right: auto;
-    left: 0;
-  }
-
   form.edit {
     grid-template-columns: 1fr;
   }

@@ -271,9 +271,10 @@
 
 
 (defn more-menu
-  "A dropdown menu of items behind a vertical triple-dot button."
+  "A dropdown menu of items behind a vertical triple-dot button. Menus share a name so
+  that the browser keeps only one open at a time."
   [& items]
-  [:details.menu.more
+  [:details.menu.more {:name "more-menu"}
    [:summary {:title "More actions" :aria-label "More actions"} dots-icon]
    (into [:div.menu-items] items)])
 
