@@ -124,6 +124,9 @@
           (is (str/includes? body (str "id=\"plan-" pid "\"")))
           (is (str/includes? body (str "id=\"plan-group-" g "-header\"")))
           (is (str/includes? body "Socks"))
+          (is (str/includes? body (str "localStorage.getItem(&#39;chequer:collapsed:plan-group-" g "&#39;)"))
+              "a group starts collapsed or not by what the browser stored")
+          (is (str/includes? body "class=\"group-toggle\"") "the group's title collapses it")
           (is (< (str/index-of body "Passport") (str/index-of body "Clothes")) "ungrouped tasks come first"))
         (is (= 404 (:status (request h :get "/plans/999"))))))))
 

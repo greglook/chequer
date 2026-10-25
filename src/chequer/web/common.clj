@@ -293,6 +293,46 @@
         body))
 
 
+;; ## Collapsible groups
+
+(def ^:private chevron-icon
+  (raw (str "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
+            "<path d=\"M6 9l6 6 6-6\"/></svg>")))
+
+
+(defn- collapse-signal
+  [element-id]
+  (str "_collapsed_" (str/replace element-id #"-" "_")))
+
+
+(defn collapsible
+  "The attributes of a group's root element, element-id: declares its collapse signal,
+  initially what this browser stored for it in localStorage, and adds the collapsed class
+  while it's set. Collapsing is per-browser state that the server never sees."
+  [element-id]
+  (let [signal (collapse-signal element-id)]
+    {:data-signals__ifmissing (str "{" signal ": localStorage.getItem('chequer:collapsed:" element-id "') === '1'}")
+     :data-class:collapsed (str "$" signal)}))
+
+
+(defn collapse-toggle
+  "A button in the header of the group element-id, holding the group's icon and title and
+  its task count while it's collapsed, that collapses or expands it and remembers that in
+  localStorage."
+  [element-id icon title task-count]
+  (let [signal (str "$" (collapse-signal element-id))
+        k (str "'chequer:collapsed:" element-id "'")]
+    [:button.group-toggle {:type "button"
+                           :data-attr:aria-expanded (str "String(!" signal ")")
+                           :data-attr:title (str signal " ? 'Expand group' : 'Collapse group'")
+                           :data-on:click (str signal " = !" signal "; "
+                                               signal " ? localStorage.setItem(" k ", '1') : localStorage.removeItem(" k ")")}
+     [:span.chevron chevron-icon]
+     [:span.icon icon]
+     [:span.title title]
+     [:span.count {:data-show signal :style "display: none"} (str "(" task-count ")")]]))
+
+
 ;; ## Expandable tasks
 
 (def ^:private notes-icon

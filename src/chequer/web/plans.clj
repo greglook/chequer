@@ -63,15 +63,15 @@
 
 
 (defn- render-group-header
-  "#plan-group-<id>-header: the group's title, its controls and an inline edit form."
-  [group]
+  "#plan-group-<id>-header: the group's title, which collapses it, its controls and an
+  inline edit form."
+  [group task-count]
   (let [id (:plan.group/id group)
         path (str "/plan-groups/" id)
         signal (toggle-signal "Group" id)]
     [:header (merge {:id (str "plan-group-" id "-header")} (edit-toggle signal))
      [:h2
-      [:span.icon (:plan.group/icon group)]
-      [:span.title (:plan.group/title group)]
+      (web/collapse-toggle (str "plan-group-" id) (:plan.group/icon group) (:plan.group/title group) task-count)
       [:span.controls
        (edit-icon-button signal)
        (move-buttons path)
@@ -100,8 +100,8 @@
   parts inside it, the header and each task, patchable on their own."
   [src plan-id {:keys [group task-ids]}]
   (let [id (:plan.group/id group)]
-    [:section.plan-group
-     [render-group-header group]
+    [:section.plan-group (web/collapsible (str "plan-group-" id))
+     [render-group-header group (count task-ids)]
      (task-list src plan-id task-ids)
      [new-task-form plan-id id]]))
 

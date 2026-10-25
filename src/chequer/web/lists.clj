@@ -157,8 +157,7 @@
         signal (toggle-signal "Group" id)]
     [:header (merge {:id (str "list-group-" id "-header")} (edit-toggle signal))
      [:h2
-      [:span.icon (:list.group/icon group)]
-      [:span.title (:list.group/title group)]
+      (web/collapse-toggle (str "list-group-" id) (:list.group/icon group) (:list.group/title group) task-count)
       [:span.controls
        (edit-icon-button signal)
        (move-buttons path)
@@ -198,7 +197,7 @@
   parts inside it, the header and each task, patchable on their own."
   [src list-id {:keys [group task-ids]} v]
   (let [id (:list.group/id group)]
-    [:section.list-group
+    [:section.list-group (web/collapsible (str "list-group-" id))
      [render-group-header group (count task-ids)]
      (task-list src list-id task-ids v)
      [new-task-form list-id id]]))
