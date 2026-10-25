@@ -293,6 +293,61 @@
         body))
 
 
+;; ## Expandable tasks
+
+(def ^:private notes-icon
+  (raw (str "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
+            "<path d=\"M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7\"/></svg>")))
+
+
+(defn- expanded-expr
+  "The expression that's true while the task element-id is the expanded one and isn't being
+  edited with the edit form shown by edit-signal."
+  [element-id edit-signal]
+  (str "$_expandedTask === '" element-id "' && !$" edit-signal))
+
+
+(defn expandable
+  "The attributes of a task's root element, element-id: declares its edit-signal and the
+  shared _expandedTask signal, holding the id of the one expanded task, and adds the
+  expanded class while it's that task."
+  [element-id edit-signal]
+  {:data-signals__ifmissing (str "{_expandedTask: '', " edit-signal ": false}")
+   :data-class:expanded (expanded-expr element-id edit-signal)})
+
+
+(defn expand-row-attrs
+  "Attributes of a task's row that expand the task element-id on a click outside its
+  controls and checkbox, or collapse it if it's already expanded."
+  [element-id]
+  {:data-on:click (str "evt.target.closest('.controls, input, a') || "
+                       "($_expandedTask = $_expandedTask === '" element-id "' ? '' : '" element-id "')")})
+
+
+(defn expand-title
+  "A task's title as a button that toggles the expanded card (the click reaches the row),
+  followed by a notes icon when the task has a description."
+  [element-id title description?]
+  (list [:button.title {:type "button"
+                        :data-attr:aria-expanded (str "String($_expandedTask === '" element-id "')")}
+         title]
+        (when description?
+          [:span.has-description {:title "Has a description"} notes-icon])))
+
+
+(defn expanded-card
+  "The full task info shown under the row while element-id is expanded: a grid of the
+  labeled facts (pairs of label and content, nil content skipped) and the rendered
+  description, if any."
+  [element-id edit-signal facts description-html]
+  [:div.task-card {:data-show (expanded-expr element-id edit-signal) :style "display: none"}
+   (for [[label content] facts
+         :when content]
+     [:div.fact [:span.label label] [:span.value content]])
+   (when description-html
+     [:div.fact.description [:span.label "Description"] [:div.markdown (raw description-html)]])])
+
+
 (defn move-buttons
   [path]
   (list [:button {:type "button" :title "Move up" :data-on:click (str "@post('" path "/move?dir=up')")} "↑"]

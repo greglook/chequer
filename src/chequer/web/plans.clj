@@ -25,23 +25,27 @@
 
 
 (defn render-plan-task
-  "#plan-task-<id>: the title row, the description, the controls and an inline edit form."
+  "#plan-task-<id>: the title row, the controls, a card of its full info that a click on the
+  row expands, and an inline edit form."
   [t]
   (let [id (:plan.task/id t)
+        el-id (str "plan-task-" id)
         path (str "/plan-tasks/" id)
         signal (toggle-signal "Task" id)
-        errors (str "plan-task-" id "-errors")]
-    [:li.plan-task (merge {:id (str "plan-task-" id)} (edit-toggle signal))
-     [:div.row
+        errors (str "plan-task-" id "-errors")
+        description (:plan.task/description t)]
+    [:li.plan-task (merge {:id el-id} (web/expandable el-id signal))
+     [:div.row (web/expand-row-attrs el-id)
       [:span.icon (:plan.task/icon t)]
-      [:span.title (:plan.task/title t)]
+      (web/expand-title el-id (:plan.task/title t) description)
       (when-let [e (:plan.task/estimate t)] [:span.estimate (str e " min")])
       [:span.controls
        (edit-icon-button signal)
        (move-buttons path)
        (more-menu (delete-menu-item "Delete this task?" path))]]
-     (when-let [d (:plan.task/description t)]
-       [:details [:summary "Description"] [:div.markdown (raw (md/render d))]])
+     (web/expanded-card el-id signal
+                        [["Estimate" (some-> (:plan.task/estimate t) (str " min"))]]
+                        (some-> description md/render))
      (edit-form signal path
                 (task-form t)
                 (errors-el errors)

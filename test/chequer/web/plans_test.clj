@@ -141,6 +141,22 @@
         (is (= 1 (count (db/q (:db sys) ["SELECT * FROM plan_task"]))))))))
 
 
+(deftest tasks-expand-into-a-card
+  (with-app
+    (fn [h sys]
+      (let [pid (create-plan! h "P")
+            _ (request h :post (str "/plans/" pid "/tasks") {:title "Noted" :description "*read me*"})
+            _ (request h :post (str "/plans/" pid "/tasks") {:title "Bare"})
+            [noted bare] (map :id (db/q (:db sys) ["SELECT id FROM plan_task ORDER BY id"]))
+            body (:body (request h :get (str "/plans/" pid)))
+            task-html (fn [id] (re-find (re-pattern (str "(?s)id=\"plan-task-" id "\".*?</li>")) body))]
+        (is (str/includes? body "_expandedTask === &#39;plan-task-")
+            "tasks share one signal, so only one is expanded at a time")
+        (is (str/includes? (task-html noted) "has-description") "a task with a description is marked")
+        (is (str/includes? (task-html noted) "<em>read me</em>") "the card shows the description")
+        (is (not (str/includes? (task-html bare) "has-description")))))))
+
+
 (deftest stream-subscribers-receive-the-re-rendered-plan
   (with-app
     (fn [h _]

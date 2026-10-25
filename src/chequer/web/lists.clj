@@ -97,18 +97,21 @@
 (defn render-task
   "#task-<id>: a checkbox toggling it between pending and completed, its due date, its
   assignee's badge beside the controls, a menu of the other states, its history and
-  deletion, its description and an inline edit form."
+  deletion, a card of its full info that a click on the row expands, and an inline edit
+  form."
   [t v]
   (let [id (:task/id t)
+        el-id (str "task-" id)
         path (str "/tasks/" id)
         state (:task/state t)
-        signal (toggle-signal "Task" id)]
-    [:li.task (merge {:id (str "task-" id) :class (name state)} (edit-toggle signal))
-     [:div.row
+        signal (toggle-signal "Task" id)
+        description (:task/description t)]
+    [:li.task (merge {:id el-id :class (name state)} (web/expandable el-id signal))
+     [:div.row (web/expand-row-attrs el-id)
       [:input {:type "checkbox" :title "Done" :checked (= :completed state)
                :data-on:change (str "@post('" path "/state?to=' + (el.checked ? 'completed' : 'pending'))")}]
       [:span.icon (:task/icon t)]
-      [:span.title (:task/title t)]
+      (web/expand-title el-id (:task/title t) description)
       (when (#{:working :abandoned} state)
         [:span.badge {:class (name state)} (name state)])
       (when-let [e (:task/estimate t)] [:span.estimate (str e " min")])
@@ -123,8 +126,12 @@
            [:button {:type "button" :data-on:click (str "@post('" (state-url id s) "')")} (state-actions s)])
          [:a {:href (str path "/history")} "History"]
          (delete-menu-item "Delete this task?" path))]]
-     (when-let [d (:task/description t)]
-       [:details [:summary "Description"] [:div.markdown (raw (md/render d))]])
+     (web/expanded-card el-id signal
+                        [["State" (name state)]
+                         ["Estimate" (some-> (:task/estimate t) (str " min"))]
+                         ["Due" (some-> (:task/due-at t) (time/format-date (:tz v)))]
+                         ["Assignee" (some->> (:task/assignee t) (find-user v) :title)]]
+                        (some-> description md/render))
      (edit-form signal path
                 (task-form t v)
                 (errors-el (str "task-" id "-errors"))
