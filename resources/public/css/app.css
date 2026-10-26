@@ -225,22 +225,54 @@ nav .links a:hover {
   text-decoration: none;
 }
 
+nav .links a.icon {
+  display: inline-grid;
+  place-items: center;
+  padding: 0.3rem 0.5rem;
+}
+
+nav .links a.icon svg {
+  width: 1.125rem;
+  height: 1.125rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 nav .links a[aria-current="page"] {
   color: var(--text);
   background: var(--surface-2);
   font-weight: 550;
 }
 
-nav .user {
+nav .account {
   margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
   min-width: 0;
+  display: flex;
 }
 
-nav .user .name {
-  color: var(--muted);
+/* The account menu opens from the user's name and badge, without a chevron. */
+nav .account > summary {
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.2rem 0.2rem 0.2rem 0.65rem;
+  border-radius: 999px;
+}
+
+nav .account > summary::after {
+  content: none;
+}
+
+nav .account .user-badge {
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: 0.8125rem;
+  cursor: inherit;
+}
+
+nav .account .name {
   font-size: 0.875rem;
   white-space: nowrap;
   overflow: hidden;
@@ -248,34 +280,48 @@ nav .user .name {
   min-width: 0;
 }
 
-nav .sign-out {
-  flex: none;
+.menu-items > form {
   margin: 0;
 }
 
-/* A plain nav control, though it submits a form: specific enough to outrank the accent
+/* A plain menu item, though it submits a form: specific enough to outrank the accent
    that submit buttons get. */
-header.site nav form.sign-out button {
-  padding: 0.3rem 0.65rem;
-  border-radius: 999px;
+header.site .menu-items form.sign-out button {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--muted);
+  color: var(--text);
+  font-size: 0.875rem;
   font-weight: normal;
 }
 
-header.site nav form.sign-out button:hover {
+header.site .menu-items form.sign-out button:hover {
   background: var(--surface-2);
-  color: var(--text);
 }
 
-.theme-toggle {
+/* Without a signed-in user the toggle stands alone, as an icon. */
+.theme-toggle.solo {
+  margin-left: auto;
   flex: none;
   width: 2.25rem;
   height: 2.25rem;
   padding: 0;
   border-radius: 999px;
-  display: inline-grid;
-  place-items: center;
+}
+
+.theme-toggle.solo .moon,
+.theme-toggle.solo .sun {
+  font-size: 0;
+}
+
+.theme-toggle .moon,
+.theme-toggle .sun {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .theme-toggle svg {
@@ -293,7 +339,7 @@ header.site nav form.sign-out button:hover {
 }
 
 :root[data-theme="dark"] .theme-toggle .sun {
-  display: block;
+  display: inline-flex;
 }
 
 :root[data-theme="dark"] .theme-toggle .moon {
@@ -302,7 +348,7 @@ header.site nav form.sign-out button:hover {
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .theme-toggle .sun {
-    display: block;
+    display: inline-flex;
   }
 
   :root:not([data-theme="light"]) .theme-toggle .moon {
@@ -1474,8 +1520,12 @@ ol.results {
 }
 
 @media (max-width: 30rem) {
-  nav .user {
+  nav .account .name {
     display: none;
+  }
+
+  nav .account > summary {
+    padding-left: 0.2rem;
   }
 
   header.site nav {

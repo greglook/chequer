@@ -20,6 +20,7 @@ A list of miscellaneous items I notice that I want to fix later.
 ## UI
 - "Add Plans" to a list should be a modal view, not a collapsed list on the page
 - Instead of just expanding description, tap task row to expand with all info in a card
+- Eventually, organize plans in a hierarchical structure?
 
 ## Bugs
 - ...

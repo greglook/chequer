@@ -42,8 +42,8 @@
     (is (str/includes? html "/css/app.css"))
     (is (str/includes? html "<main><h1>Hello</h1></main>"))
     (is (str/includes? html "<a href=\"/\" aria-current=\"page\">Lists</a>"))
-    (doseq [[href label] [["/plans" "Plans"] ["/search" "Search"]]]
-      (is (str/includes? html (str "<a href=\"" href "\">" label "</a>")) label))
+    (is (str/includes? html "<a href=\"/plans\">Plans</a>"))
+    (is (str/includes? html "<a class=\"icon\" href=\"/search\" title=\"Search\" aria-label=\"Search\"><svg"))
     (is (str/includes? html "Greg"))
     (is (str/includes? html "Intl.DateTimeFormat"))))
 
@@ -60,6 +60,8 @@
   (let [html (layout/page (req) "Lists" [:p "ok"])]
     (is (str/includes? html "localStorage.getItem('theme')"))
     (is (str/includes? html "onclick=\"toggleTheme()\""))
+    (is (< (str/index-of html "class=\"menu account\"") (str/index-of html "onclick=\"toggleTheme()\""))
+        "the toggle is in the account menu")
     (is (< (str/index-of html "localStorage.getItem") (str/index-of html "/css/app.css"))
         "the saved theme applies before the stylesheet loads")))
 
