@@ -10,6 +10,7 @@
     [clojure.string :as str]
     [db.jdbc]
     [jdbc.core :as jdbc]
+    [jolt.fs :as fs]
     [tick.core :as t]))
 
 
@@ -60,7 +61,7 @@
   directory cannot be listed in a built binary, but its files can still be
   read."
   []
-  (vec (sort (map #(.getName %) (.listFiles (io/file (io/resource migrations-dir)))))))
+  (vec (sort (map fs/file-name (fs/list-dir (io/resource migrations-dir))))))
 
 
 (def migration-files
@@ -147,7 +148,7 @@
 (defn- vacuum-into!
   "Copy the database on conn to the file dest with VACUUM INTO; an existing file is never overwritten."
   [conn dest]
-  (when (.exists (io/file dest))
+  (when (fs/exists? dest)
     (throw (ex-info (str "Backup already exists, refusing to overwrite: " dest)
                     {:backup dest})))
   (jdbc/execute! conn ["VACUUM INTO ?" dest]))

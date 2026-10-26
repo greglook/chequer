@@ -4,9 +4,9 @@
     [chequer.db :as db]
     [chequer.main :as main]
     [chequer.test-helpers :as th]
-    [clojure.java.io :as io]
     [clojure.test :refer [deftest is]]
-    [jdbc.core :as jdbc]))
+    [jdbc.core :as jdbc]
+    [jolt.fs :as fs]))
 
 
 (deftest parse-args-subcommands
@@ -42,7 +42,7 @@
 
 
 (deftest check-config-results
-  (let [path (str (System/getProperty "java.io.tmpdir") "/chequer-main-test-" (System/nanoTime) ".ini")]
+  (let [path (str (fs/temp-dir) "/chequer-main-test-" (System/nanoTime) ".ini")]
     (try
       (spit path "[server]\nlisten = :8080\n")
       (let [{:keys [ok? config]} (main/check-config path)]
@@ -50,7 +50,7 @@
         (is (= 8080 (get-in config [:server :listen :port]))))
       (spit path "[auth]\nmode = proxy\n")
       (is (not (:ok? (main/check-config path))) "proxy mode needs a header")
-      (finally (.delete (io/file path)))))
+      (finally (fs/delete-if-exists path))))
   (is (not (:ok? (main/check-config "/nonexistent/config.ini")))))
 
 
@@ -60,24 +60,22 @@
     (try
       (spit path "")
       (is (:ok? (main/check-database path)) "a writable regular file")
-      (finally (.delete (io/file path)))))
-  (is (not (:ok? (main/check-database (System/getProperty "java.io.tmpdir")))) "a directory")
+      (finally (fs/delete-if-exists path))))
+  (is (not (:ok? (main/check-database (fs/temp-dir)))) "a directory")
   (is (not (:ok? (main/check-database "/nonexistent/chequer.db"))) "a missing directory"))
 
 
 (deftest check-database-needs-a-writable-directory
-  (let [dir (io/file (str (System/getProperty "java.io.tmpdir") "/chequer-main-test-" (System/nanoTime)))
+  (let [dir (fs/create-temp-dir {:prefix "chequer-main-test-"})
         path (str dir "/chequer.db")]
-    (.mkdir dir)
     (try
       (spit path "")
-      (.setWritable dir false)
-      (when-not (.canWrite dir) ; root can write anyway
+      (fs/set-posix-file-permissions dir "r-xr-xr-x")
+      (when-not (fs/writable? dir) ; root can write anyway
         (is (re-find #"not writable" (:message (main/check-database path)))))
       (finally
-        (.setWritable dir true)
-        (.delete (io/file path))
-        (.delete dir)))))
+        (fs/set-posix-file-permissions dir "rwx------")
+        (fs/delete-tree dir)))))
 
 
 (defn- set-version!

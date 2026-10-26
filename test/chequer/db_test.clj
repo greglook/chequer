@@ -2,10 +2,10 @@
   (:require
     [chequer.db :as db]
     [chequer.test-helpers :as helpers]
-    [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is]]
     [jdbc.core :as jdbc]
+    [jolt.fs :as fs]
     [tick.core :as t]))
 
 
@@ -174,7 +174,7 @@
       (is (= #{"user" "event" "plan" "plan_group" "plan_task" "list" "list_group" "task" "search"
                "session"}
              (table-names d)))
-      (is (not (.exists (io/file (str path ".pre-v" latest ".bak"))))
+      (is (not (fs/exists? (str path ".pre-v" latest ".bak")))
           "an empty database needs no backup"))))
 
 
@@ -184,7 +184,7 @@
       (db/migrate! d)
       (db/migrate! d)
       (is (= latest (user-version d)))
-      (is (not (.exists (io/file (str path ".pre-v" latest ".bak"))))))))
+      (is (not (fs/exists? (str path ".pre-v" latest ".bak")))))))
 
 
 (deftest migrate-returns-the-applied-migrations
@@ -235,7 +235,7 @@
       (let [backup (str path ".pre-v" latest ".bak")
             b (db/open backup)]
         (try
-          (is (.exists (io/file backup)))
+          (is (fs/exists? backup))
           (is (= 0 (:user_version (jdbc/fetch-one (:writer b) "PRAGMA user_version")))
               "the backup is the pre-migration state")
           (is (= {:n 1} (db/q1 b ["SELECT count(*) AS n FROM legacy"])))

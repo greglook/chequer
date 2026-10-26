@@ -7,10 +7,10 @@
     [chequer.db :as db]
     [chequer.oidc :as oidc]
     [chequer.time :as time]
-    [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.tools.cli :as cli]
     [clojure.tools.logging :as log]
+    [jolt.fs :as fs]
     [jolt.host :as host]))
 
 
@@ -120,24 +120,23 @@
   absent so it can be created, in a writable directory where SQLite keeps its
   WAL files and migration backups."
   [path]
-  (let [file (.getAbsoluteFile (io/file path))
-        dir (.getParentFile file)
+  (let [dir (fs/parent (fs/absolutize path))
         result (partial check-result "database")]
     (cond
-      (and (.exists file) (not (.isFile file)))
+      (and (fs/exists? path) (not (fs/regular-file? path)))
       (result false (str "Database " path " is not a regular file"))
 
-      (and (.isFile file) (not (.canWrite file)))
+      (and (fs/regular-file? path) (not (fs/writable? path)))
       (result false (str "Database " path " is not writable"))
 
-      (not (.isDirectory dir))
+      (not (fs/directory? dir))
       (result false (str "Database directory " dir " does not exist"))
 
-      (not (.canWrite dir))
+      (not (fs/writable? dir))
       (result false (str "Database directory " dir " is not writable, but SQLite"
                          " needs it for WAL files and migration backups"))
 
-      (.isFile file)
+      (fs/regular-file? path)
       (result true (str "Database " path " exists and is writable"))
 
       :else
@@ -163,7 +162,7 @@
           (zero? pending)
           (result true (str "Database is up to date at schema v" version))
 
-          (and (< 0 version) (.exists (io/file backup)))
+          (and (< 0 version) (fs/exists? backup))
           (result false (str "Database is at schema v" version " with " pending
                              " pending migration(s), but backup " backup
                              " already exists and would stop them"))
@@ -217,7 +216,7 @@
         db-check (check-database db-path)
         {:keys [mode] proxy-cfg :proxy oidc-cfg :oidc} (:auth cfg)]
     (cond-> [db-check]
-      (and (:ok? db-check) (.isFile (io/file db-path))) (conj (check-schema db-path))
+      (and (:ok? db-check) (fs/regular-file? db-path)) (conj (check-schema db-path))
       true (conj (check-time-zone (get-in cfg [:server :time-zone])))
       (= :proxy mode) (conj (check-trusted-proxies (:trusted-proxies proxy-cfg)))
       (= :oidc mode) (conj (check-session-key oidc-cfg)
@@ -264,7 +263,7 @@
   "Write a backup of the configured database to dest."
   [cfg dest]
   (let [path (get-in cfg [:database :path])]
-    (when-not (.exists (io/file path))
+    (when-not (fs/exists? path)
       (fail (str "Database not found: " path)))
     (let [d (db/open path)]
       (try

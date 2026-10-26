@@ -1,7 +1,8 @@
 (ns chequer.config-test
   (:require
     [chequer.config :as config]
-    [clojure.test :refer [deftest is testing]]))
+    [clojure.test :refer [deftest is testing]]
+    [jolt.fs :as fs]))
 
 
 (def ^:private sample-ini
@@ -123,8 +124,8 @@ header=X-Remote-User
 
 
 (deftest load-config-reads-a-file
-  (let [path (str "/tmp/chequer-config-test-" (System/nanoTime) ".ini")]
+  (let [path (str (fs/temp-dir) "/chequer-config-test-" (System/nanoTime) ".ini")]
     (spit path sample-ini)
     (try
       (is (= 8080 (get-in (config/load-config path) [:server :listen :port])))
-      (finally (.delete (java.io.File. path))))))
+      (finally (fs/delete-if-exists path)))))
