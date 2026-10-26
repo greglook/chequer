@@ -31,6 +31,21 @@
   (select-keys req [:chequer/db :chequer/live]))
 
 
+(def live-attrs
+  "Attributes for a page's #live root, which opens its SSE stream. glimmer-datastar's
+  init-opts leaves Datastar's retry at auto, which gives up for good when the stream ends
+  cleanly or a reconnect gets an error status, as when the server restarts; always retries
+  those too, with the same backoff."
+  (let [opts "{openWhenHidden: false, retryMaxCount: Infinity}"
+        retry (fn [expr]
+                (when-not (str/includes? expr opts)
+                  (throw (ex-info "init-opts no longer has the expected @get options" {:expr expr})))
+                (str/replace expr opts "{openWhenHidden: false, retry: 'always', retryMaxCount: Infinity}"))]
+    (-> (ds/init-opts {:selector "#live"})
+        (update :data-init retry)
+        (update "data-on:online__window" retry))))
+
+
 ;; ## User badges
 
 (defn- name-hue

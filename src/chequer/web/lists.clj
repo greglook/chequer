@@ -396,7 +396,7 @@
                                    (if archived?
                                      [:a {:href "/"} "Show active"]
                                      [:a {:href "/lists?archived=1"} "Show archived"])]
-                                  [:div#live (ds/init-opts {:selector "#live"}) fragment])))))
+                                  [:div#live web/live-attrs fragment])))))
 
 
 (defn new-page
@@ -429,7 +429,7 @@
       (if-let [{:keys [title]} (db/q1 db ["SELECT title FROM list WHERE id = ?" id])]
         (html-response 200
                        (layout/page req title
-                                    [:div#live (ds/init-opts {:selector "#live"}) fragment]
+                                    [:div#live web/live-attrs fragment]
                                     (add-plans-form id (plans/list-plans db))))
         (text-response 404 "Not found")))))
 

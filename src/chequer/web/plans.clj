@@ -202,7 +202,7 @@
     (if (:jolt.datastar/sse-request req)
       (html-response 200 (html fragment))
       (if-let [{:keys [title]} (db/q1 db ["SELECT title FROM plan WHERE id = ?" id])]
-        (html-response 200 (layout/page req title [:div#live (ds/init-opts {:selector "#live"}) fragment]))
+        (html-response 200 (layout/page req title [:div#live web/live-attrs fragment]))
         (text-response 404 "Not found")))))
 
 
