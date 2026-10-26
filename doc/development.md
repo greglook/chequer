@@ -24,6 +24,7 @@ State is kept (the SQLite database) under `dev/state/`. Arguments are passed thr
 takes a subcommand:
 
 - `server` runs the server.
+- `validate` checks that the config, database and auth settings are ready for the server, exiting with status 1 if not.
 - `migrate` applies pending migrations to the configured database and lists the ones applied.
 - `backup DEST` writes a copy of the configured database to the file `DEST`, refusing to overwrite it.
 

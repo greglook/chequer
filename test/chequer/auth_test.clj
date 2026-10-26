@@ -40,6 +40,13 @@
                      "auth.proxy" {"header" "X-Forwarded-User"}}))
 
 
+(deftest cidr-validation
+  (doseq [good ["127.0.0.1" "10.0.0.0/8" "0.0.0.0/0" "192.168.1.0/32" "::1" "fd00::/8" "::/128"]]
+    (is (auth/valid-cidr? good) good))
+  (doseq [bad ["" "localhost" "10.0.0.0/33" "::/129" "10.0.0.0/" "10.0.0.0/x" "10.0.0.0/-1" "/8"]]
+    (is (not (auth/valid-cidr? bad)) bad)))
+
+
 (deftest cidr-matching
   (is (auth/trusted? "10.2.3.4" ["10.0.0.0/8"]))
   (is (not (auth/trusted? "11.0.0.1" ["10.0.0.0/8"])))

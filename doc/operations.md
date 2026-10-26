@@ -31,13 +31,23 @@ The binary takes a subcommand:
 
 - `server` runs the server until it gets `SIGINT` or `SIGTERM`, then shuts down
   cleanly.
+- `validate` checks that the server is ready to run, printing the outcome of
+  each check and exiting with status 1 if any fail. It checks that:
+  - the config file loads and is valid;
+  - the database is a writable file, or can be created, in a writable directory
+    (SQLite keeps its WAL files there, and migration backups go there too);
+  - an existing database isn't newer than the binary, and no leftover
+    migration backup would stop its pending migrations;
+  - `time-zone` is a known time zone;
+  - in proxy mode, every `trusted-proxies` entry is an IP or CIDR;
+  - in OIDC mode, the `session-key` is usable and the issuer's discovery
+    document can be fetched.
 - `migrate` applies pending migrations and lists the ones it applied. The
   server does this on startup too, so running it separately is optional.
 - `backup DEST` writes a copy of the database to the file `DEST`.
 
 The config file comes from `--config`, then the `CHEQUER_CONFIG` environment
-variable, then `config.ini` in the working directory, and finally from
-`/etc/chequer/config.ini`.
+variable, and finally `config.ini` in the working directory.
 
 ### Container
 

@@ -93,6 +93,17 @@
     (vec)))
 
 
+(def latest-version
+  "The schema version the newest migration brings a database to."
+  (:version (parse-migration-name (peek migration-files))))
+
+
+(defn migration-versions
+  "The schema version of each migration, in order."
+  []
+  (mapv (comp :version parse-migration-name) migration-files))
+
+
 (defn- load-migration
   "Prepare a migration to be run by parsing its filename and attaching a delay
   which will return the SQL statements."
@@ -116,6 +127,21 @@
   "True when the database has no user tables."
   [conn]
   (nil? (jdbc/fetch-one conn "SELECT 1 FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' LIMIT 1")))
+
+
+(defn schema-version
+  "The schema version of the existing database file at path, read without migrating it."
+  [path]
+  (let [conn (jdbc/connection (str "sqlite:" path))]
+    (try
+      (user-version conn)
+      (finally (.close conn)))))
+
+
+(defn migration-backup-path
+  "The file a non-empty database at path is copied to before migrating to version."
+  [path version]
+  (str path ".pre-v" version ".bak"))
 
 
 (defn- vacuum-into!
@@ -149,7 +175,7 @@
        (when (seq pending)
          (let [target (:version (last pending))]
            (when-not (empty-database? writer)
-             (vacuum-into! writer (str path ".pre-v" target ".bak")))
+             (vacuum-into! writer (migration-backup-path path target)))
            (jdbc/atomic writer
                         (doseq [{:keys [statements]} pending
                                 statement @statements]

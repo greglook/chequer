@@ -60,23 +60,32 @@
   32)
 
 
+(defn session-key-problem
+  "A description of what makes the hex session-key of the OIDC config unusable, or nil if
+  it is usable."
+  [oidc-cfg]
+  (let [hex (some-> (:session-key oidc-cfg) str/trim)
+        k (crypto/unhex hex)]
+    (cond
+      (str/blank? hex)
+      "Missing [auth.oidc] session-key"
+
+      (not (and k (<= min-session-key-bytes (count k))))
+      (str "Invalid [auth.oidc] session-key: expected at least " min-session-key-bytes
+           " bytes as hex"))))
+
+
 (defn session-key
   "The key that signs login cookies, decoded from the hex session-key of the OIDC config.
   When it is missing or unusable, log how to generate one and throw."
   [oidc-cfg]
-  (let [hex (some-> (:session-key oidc-cfg) str/trim)
-        k (crypto/unhex hex)]
-    (if (and k (<= min-session-key-bytes (count k)))
-      k
-      (let [problem (if (str/blank? hex)
-                      "Missing [auth.oidc] session-key"
-                      (str "Invalid [auth.oidc] session-key: expected at least " min-session-key-bytes
-                           " bytes as hex"))]
-        (log/error (str problem ". It signs login cookies and is required in oidc mode."
+  (if-let [problem (session-key-problem oidc-cfg)]
+    (do (log/error (str problem ". It signs login cookies and is required in oidc mode."
                         " Generate one with:\n\n    openssl rand -hex 32\n\n"
                         "and add it to the configuration file:\n\n"
                         "    [auth.oidc]\n    session-key = <the output>\n"))
-        (throw (ex-info problem {:key :session-key}))))))
+        (throw (ex-info problem {:key :session-key})))
+    (crypto/unhex (str/trim (:session-key oidc-cfg)))))
 
 
 (defn- strip-trailing-slash
@@ -128,6 +137,13 @@
           (throw (ex-info (str "OIDC discovery at " url " names another issuer: " (get doc "issuer"))
                           {:url url :issuer (get doc "issuer")})))
         (reset! discovery doc))))
+
+
+(defn discover-issuer
+  "Fetch the discovery document of the OIDC issuer URL, without building a provider.
+  Throws as discover does."
+  [issuer]
+  (discover {:issuer issuer :discovery (atom nil) :http-get http-get}))
 
 
 ;; ## Login Cookie

@@ -334,7 +334,9 @@
          (seq (oidc/session-key {:session-key (str " " (apply str (repeat 32 "A5")) " ")})))
       "hex in either case, trimmed")
   (is (= 48 (count (oidc/session-key {:session-key (apply str (repeat 48 "00"))}))) "longer keys are fine")
+  (is (nil? (oidc/session-key-problem {:session-key (apply str (repeat 32 "a5"))})))
   (doseq [bad [nil "" "  " (apply str (repeat 31 "a5")) (apply str (repeat 32 "zz")) "abc"]]
+    (is (string? (oidc/session-key-problem {:session-key bad})) (pr-str bad))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"session-key"
           (oidc/session-key {:session-key bad}))
         (pr-str bad))))

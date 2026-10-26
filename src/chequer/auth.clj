@@ -47,6 +47,18 @@
          (prefix-match? (if prefix (parse-long prefix) (* 8 (count net))) addr net))))
 
 
+(defn valid-cidr?
+  "True if cidr is an IP literal, or an IP literal with a /prefix no longer than its address."
+  [cidr]
+  (let [[ip prefix] (str/split cidr #"/" 2)
+        net (ip-bytes ip)]
+    (boolean
+      (and net
+           (or (nil? prefix)
+               (and (re-matches #"\d{1,3}" prefix)
+                    (<= (parse-long prefix) (* 8 (count net)))))))))
+
+
 (defn trusted?
   "True if remote-addr, an IPv4 or IPv6 literal, is inside any of cidrs (IPs or IP/prefix strings)."
   [remote-addr cidrs]
