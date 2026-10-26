@@ -1032,17 +1032,7 @@ ul.plan-tasks:empty {
   stroke-linejoin: round;
 }
 
-.task.expanded,
-.plan-task.expanded {
-  position: relative;
-  margin: 0.5rem -0.25rem;
-  padding-inline: 1rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
-}
-
+/* Like an inline edit form, the card is a panel inset in the row. */
 .task-card {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
