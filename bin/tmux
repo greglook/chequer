@@ -33,7 +33,7 @@ tmux send-keys  -t chequer:3 "vi README.md" C-m
 tmux new-window -t chequer:4 -n build
 
 tmux new-window -t chequer:5 -n robut
-tmux send-keys  -t chequer:3 "dirge" C-m
+tmux send-keys  -t chequer:5 "dirge" C-m
 
 # Attach to session
 tmux select-window -t chequer:3

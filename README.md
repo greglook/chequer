@@ -21,8 +21,8 @@ build.
 With a container:
 
 ```sh
-podman build --format docker -t chequer .
-podman run -d --name chequer -p 3000:3000 -v chequer-data:/data chequer
+bin/build image
+podman run -d --name chequer -p 3000:3000 -v chequer-data:/data chequer:dev
 ```
 
 Or build the binary (this requires Jolt) and run it with the example config:
