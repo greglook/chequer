@@ -14,6 +14,9 @@ Chequer is a simple web application that runs from a single binary and stores it
 - **UI:** Server-rendered HTML using [Datastar](https://data-star.dev/), with
   updates delivered over server-sent events (SSE). There is no separate
   frontend build step.
+- **State:** A [clip](https://github.com/juxt/clip) system in `chequer.core` holds the running components: the
+  database, the live-update state, the OIDC provider, the HTTP server, and the session sweeper. Clip starts them
+  in dependency order and stops them in reverse.
 
 
 ## Data Model

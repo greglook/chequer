@@ -8,6 +8,7 @@
   (:require
     [clojure.java.io :as io]
     [clojure.string :as str]
+    [clojure.tools.logging :as log]
     [db.jdbc]
     [jdbc.core :as jdbc]
     [jolt.fs :as fs]
@@ -178,10 +179,11 @@
            (when-not (empty-database? writer)
              (vacuum-into! writer (migration-backup-path path target)))
            (jdbc/atomic writer
-                        (doseq [{:keys [statements]} pending
-                                statement @statements]
-                          (jdbc/execute! writer statement))
-                        (jdbc/execute! writer (str "PRAGMA user_version = " target)))))
+             (doseq [migration pending]
+               (log/info "Applying migration" (:file migration))
+               (doseq [statement @(:statements migration)]
+                 (jdbc/execute! writer statement)))
+             (jdbc/execute! writer (str "PRAGMA user_version = " target)))))
        pending))))
 
 

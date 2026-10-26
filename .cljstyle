@@ -8,4 +8,5 @@
  :rules
  {:indentation
   {:indents
-   {#"(^|/)with-.*" [[:block 1]]}}}}
+   {jdbc/atomic [[:block 1]]
+    #"(^|/)with-.*" [[:block 1]]}}}}

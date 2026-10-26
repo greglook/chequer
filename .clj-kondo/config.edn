@@ -1,5 +1,6 @@
 {:lint-as
- {chequer.db/with-tx clojure.core/let}
+ {chequer.db/with-tx clojure.core/let
+  juxt.clip.core/with-deps clojure.core/fn}
 
  :linters
  {:consistent-alias

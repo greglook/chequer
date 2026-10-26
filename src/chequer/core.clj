@@ -1,5 +1,5 @@
 (ns chequer.core
-  "System wiring: the ring handler, middleware, and server start and stop."
+  "System wiring: the ring handler, middleware, and the clip system of components which\n  hold the application's state, from the database to the HTTP server."
   (:require
     [chequer.auth :as auth]
     [chequer.db :as db]
@@ -15,6 +15,7 @@
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.tools.logging :as log]
+    [juxt.clip.core :as clip]
     [ring-chez.adapter :as adapter]
     [ring.middleware.cookies :refer [wrap-cookies]]
     [ring.middleware.not-modified :refer [wrap-not-modified]]
@@ -127,33 +128,65 @@
           (throw e))))))
 
 
-(defn start!
-  "Open and migrate the database, then start the HTTP server. Returns
-  {:server .. :db .. :cfg .. :live ..}, plus the :oidc provider and the expired-session
-  :sweeper in OIDC mode."
+(defn- start-server
+  "Start the HTTP server for the components of sys on the configured listen address."
+  [{:keys [cfg] :as sys}]
+  (let [{:keys [host port]} (get-in cfg [:server :listen])]
+    (adapter/run-server (wrap-request-log (handler sys))
+                        {:host host :port port :strategy :fibers})))
+
+
+(defn- stop-sweeper!
+  "Stop the expired-session sweeper, if one was started."
+  [sweeper]
+  (when sweeper
+    (sessions/stop-sweeper! sweeper)))
+
+
+(defn system-config
+  "Construct a clip component system from the config."
   [cfg]
-  (let [db (db/open (get-in cfg [:database :path]))]
+  {:components
+   (->
+     {:cfg {:start (constantly cfg)}
+      :db {:start #(db/open (get-in cfg [:database :path]))
+           :post-start db/migrate!
+           :stop db/close!}
+      :live {:start live/live
+             :stop live/stop!}
+      ;; TODO: rename this to a more general :auth component?
+      :oidc {:start (constantly nil)}
+      :server {:start (list start-server
+                            {:cfg cfg
+                             :db (clip/ref :db)
+                             :live (clip/ref :live)
+                             :oidc (clip/ref :oidc)})
+               :stop adapter/stop-server}}
+     (cond->
+       (= :oidc (get-in cfg [:auth :mode]))
+       (assoc :oidc {:start #(oidc/provider cfg)}
+              :sweeper {:start (list sessions/start-sweeper! (clip/ref :db))
+                        :stop stop-sweeper!})))})
+
+
+(defn start!
+  "Start the system for the config cfg: open and migrate the database, then start the HTTP
+  server. Returns the running system {:cfg .. :db .. :live .. :oidc .. :server .. :sweeper ..}.
+  If a component fails to start, the ones already started are stopped and the failure is
+  rethrown."
+  [cfg]
+  (let [sys-cfg (system-config cfg)]
     (try
-      (doseq [{:keys [file]} (db/migrate! db)]
-        (log/info (str "Applied migration " file)))
-      (let [{:keys [host port]} (get-in cfg [:server :listen])
-            oidc? (= :oidc (get-in cfg [:auth :mode]))
-            sys (cond-> {:db db :cfg cfg :live (live/live)}
-                  oidc? (assoc :oidc (oidc/provider cfg)))
-            server (adapter/run-server (wrap-request-log (handler sys))
-                                       {:host host :port port :strategy :fibers})]
-        (cond-> (assoc sys :server server)
-          oidc? (assoc :sweeper (sessions/start-sweeper! db))))
+      (vary-meta (clip/start sys-cfg) assoc ::system-config sys-cfg)
       (catch Exception e
-        (db/close! db)
-        (throw e)))))
+        (if-let [partial-sys (::clip/system (ex-data e))]
+          (do (clip/stop sys-cfg partial-sys)
+              (throw (or (ex-cause e) e)))
+          (throw e))))))
 
 
 (defn stop!
-  "Stop the HTTP server and close the database of a system returned by start!."
-  [{:keys [server db live sweeper]}]
-  (adapter/stop-server server)
-  (when sweeper
-    (sessions/stop-sweeper! sweeper))
-  (live/stop! live)
-  (db/close! db))
+  "Stop the components of a system returned by start!, in reverse dependency order."
+  [sys]
+  (clip/stop (::system-config (meta sys)) sys)
+  nil)

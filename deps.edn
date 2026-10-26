@@ -43,6 +43,11 @@
   {:git/url "https://github.com/clojure/data.json.git"
    :git/sha "94463ffb54482427fd9b31f264b06bff6dcfd557"}
 
+  juxt/clip
+  {:git/url "https://github.com/juxt/clip"
+   :git/tag "v0.29.0"
+   :git/sha "277021436144abed02f4a987557b7d3e36483cde"}
+
   metosin/malli
   {:git/url "https://github.com/metosin/malli"
    :git/sha "91d3c1bb81288d5b2e3d260fd9847da3b74c631c"}

@@ -161,6 +161,27 @@
         (helpers/delete-db-files path)))))
 
 
+(deftest start-stops-started-components-when-one-fails
+  (let [path (helpers/temp-db-path)
+        other (helpers/temp-db-path)
+        sys (core/start! (config/normalize {"database" {"path" path}
+                                            "server" {"listen" "127.0.0.1:0"}}))
+        port (:port (:server sys))]
+    (try
+      (let [e (try
+                (core/start! (config/normalize {"database" {"path" other}
+                                                "server" {"listen" (str "127.0.0.1:" port)}}))
+                nil
+                (catch Exception e e))]
+        (is (some? e) "a taken port fails the start")
+        (is (not= "Failure while executing on system" (ex-message e))
+            "the component's own failure is rethrown"))
+      (finally
+        (core/stop! sys)
+        (helpers/delete-db-files path)
+        (helpers/delete-db-files other)))))
+
+
 (deftest index-page-shows-the-current-user-and-empty-state
   (with-handler
     (fn [h]
