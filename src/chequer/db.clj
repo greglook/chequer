@@ -180,7 +180,7 @@
              (vacuum-into! writer (migration-backup-path path target)))
            (jdbc/atomic writer
              (doseq [migration pending]
-               (log/info "Applying migration" (:file migration))
+               (log/info "Applying migration" (str/replace (:file migration) #"\.sql$" ""))
                (doseq [statement @(:statements migration)]
                  (jdbc/execute! writer statement)))
              (jdbc/execute! writer (str "PRAGMA user_version = " target)))))
