@@ -3,7 +3,13 @@
     [chequer.db :as db]
     [chequer.users :as users]
     [clojure.string :as str]
+    [clojure.tools.logging.impl :as log-impl]
     [jolt.fs :as fs]))
+
+
+;; Silence the default stderr logger so test output isn't buried in log noise. Tests
+;; that check logging bind their own clojure.tools.logging/*logger-factory*.
+(alter-var-root #'log-impl/*level* (constantly :fatal))
 
 
 (defn temp-db-path
