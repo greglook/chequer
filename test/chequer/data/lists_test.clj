@@ -31,14 +31,14 @@
 
 
 (defn- seed
-  "A list with group g1 holding tasks a, b; ungrouped task c."
+  "A list with section g1 holding tasks a, b; unsectioned task c."
   [d u]
   (:result
     (tx! d (fn [tx]
              (let [lid (lists/create-list! tx u {:title "L"})
-                   g1 (lists/create-group! tx u {:list-id lid :title "G1"})
-                   a (lists/create-task! tx u {:list-id lid :group-id g1 :title "a"})
-                   b (lists/create-task! tx u {:list-id lid :group-id g1 :title "b"})
+                   g1 (lists/create-section! tx u {:list-id lid :title "G1"})
+                   a (lists/create-task! tx u {:list-id lid :section-id g1 :title "a"})
+                   b (lists/create-task! tx u {:list-id lid :section-id g1 :title "b"})
                    c (lists/create-task! tx u {:list-id lid :title "c"})]
                {:lid lid :g1 g1 :a a :b b :c c})))))
 
@@ -153,50 +153,50 @@
 
 
 (defn- shape
-  "The display order of a loaded list as [ungrouped-titles [group-title task-titles]...]."
-  [{:keys [ungrouped groups]}]
-  [(mapv :task/title ungrouped)
-   (mapv (fn [{:keys [group tasks]}] [(:list.group/title group) (mapv :task/title tasks)]) groups)])
+  "The display order of a loaded list as [unsectioned-titles [section-title task-titles]...]."
+  [{:keys [unsectioned sections]}]
+  [(mapv :task/title unsectioned)
+   (mapv (fn [{:keys [section tasks]}] [(:list.section/title section) (mapv :task/title tasks)]) sections)])
 
 
-(deftest load-list-puts-ungrouped-tasks-first-then-groups-in-order
+(deftest load-list-puts-unsectioned-tasks-first-then-sections-in-order
   (with-user
     (fn [d u]
       (let [{:keys [lid a]} (seed d u)
             loaded (lists/load-list d lid)]
         (is (= [["c"] [["G1" ["a" "b"]]]] (shape loaded)))
         (is (= {:task/id a :task/list lid :task/state :pending}
-               (select-keys (first (:tasks (first (:groups loaded)))) [:task/id :task/list :task/state])))))))
+               (select-keys (first (:tasks (first (:sections loaded)))) [:task/id :task/list :task/state])))))))
 
 
-(deftest moving-groups-and-tasks-changes-display-order
+(deftest moving-sections-and-tasks-changes-display-order
   (with-user
     (fn [d u]
       (let [{:keys [lid g1 a b c]} (seed d u)
-            g2 (:result (tx! d #(lists/create-group! % u {:list-id lid :title "G2"})))
-            d2 (:result (tx! d #(lists/create-task! % u {:list-id lid :group-id g2 :title "d"})))
+            g2 (:result (tx! d #(lists/create-section! % u {:list-id lid :title "G2"})))
+            d2 (:result (tx! d #(lists/create-task! % u {:list-id lid :section-id g2 :title "d"})))
             before (count (events d))]
-        (is (= #{[:list lid] [:list lid :structure]} (:topics (tx! d #(lists/move-group! % u {:id g2 :direction :up})))))
-        (is (= #{[:list lid] [:list lid :structure]} (:topics (tx! d #(lists/place-task! % u {:id b :group-id g1 :before a})))))
-        (tx! d #(lists/place-task! % u {:id d2 :group-id g2 :before nil}))
+        (is (= #{[:list lid] [:list lid :structure]} (:topics (tx! d #(lists/move-section! % u {:id g2 :direction :up})))))
+        (is (= #{[:list lid] [:list lid :structure]} (:topics (tx! d #(lists/place-task! % u {:id b :section-id g1 :before a})))))
+        (tx! d #(lists/place-task! % u {:id d2 :section-id g2 :before nil}))
         (is (= [["c"] [["G2" ["d"]] ["G1" ["b" "a"]]]] (shape (lists/load-list d lid))))
-        (is (= g1 (:group_id (db/q1 d ["SELECT group_id FROM task WHERE id = ?" b]))))
-        (tx! d #(lists/place-task! % u {:id a :group-id g2 :before d2}))
-        (tx! d #(lists/place-task! % u {:id c :group-id g1 :before nil}))
-        (tx! d #(lists/place-task! % u {:id b :group-id nil :before nil}))
+        (is (= g1 (:section_id (db/q1 d ["SELECT section_id FROM task WHERE id = ?" b]))))
+        (tx! d #(lists/place-task! % u {:id a :section-id g2 :before d2}))
+        (tx! d #(lists/place-task! % u {:id c :section-id g1 :before nil}))
+        (tx! d #(lists/place-task! % u {:id b :section-id nil :before nil}))
         (is (= [["b"] [["G2" ["a" "d"]] ["G1" ["c"]]]] (shape (lists/load-list d lid)))
-            "placing a task in another group, or none, moves it there")
+            "placing a task in another section, or none, moves it there")
         (is (= before (count (events d))) "reordering records no events")))))
 
 
-(deftest updating-groups-and-tasks-records-diffs
+(deftest updating-sections-and-tasks-records-diffs
   (with-user
     (fn [d u]
       (let [{:keys [lid g1 a]} (seed d u)
             before (count (events d))]
-        (is (= #{[:list lid] [:list lid :structure]} (:topics (tx! d #(lists/update-group! % u {:id g1 :title "Clothes" :icon "👕"})))))
+        (is (= #{[:list lid] [:list lid :structure]} (:topics (tx! d #(lists/update-section! % u {:id g1 :title "Clothes" :icon "👕"})))))
         (tx! d #(lists/update-task! % u {:id a :title "a2" :due_at 9000 :assignee_id (:id u)}))
-        (is (= [{:entity_type "list.group" :entity_id g1 :list_id lid :action "update"
+        (is (= [{:entity_type "list.section" :entity_id g1 :list_id lid :action "update"
                  :data {:title ["G1" "Clothes"] :icon [nil "👕"]}}
                 {:entity_type "task" :entity_id a :list_id lid :action "update"
                  :data {:title ["a" "a2"] :due_at [nil 9000] :assignee_id [nil (:id u)]
@@ -204,16 +204,16 @@
                (subvec (events d) before)))))))
 
 
-(deftest deleting-a-group-deletes-and-logs-its-tasks
+(deftest deleting-a-section-deletes-and-logs-its-tasks
   (with-user
     (fn [d u]
       (let [{:keys [lid g1 a b]} (seed d u)
             before (count (events d))]
-        (is (= #{[:list lid] [:list lid :header] [:list lid :structure]} (:topics (tx! d #(lists/delete-group! % u {:id g1})))))
+        (is (= #{[:list lid] [:list lid :header] [:list lid :structure]} (:topics (tx! d #(lists/delete-section! % u {:id g1})))))
         (is (= [["c"] []] (shape (lists/load-list d lid))))
         (is (= [{:entity_type "task" :entity_id a :list_id lid :action "delete" :data {:title "a"}}
                 {:entity_type "task" :entity_id b :list_id lid :action "delete" :data {:title "b"}}
-                {:entity_type "list.group" :entity_id g1 :list_id lid :action "delete" :data {:title "G1"}}]
+                {:entity_type "list.section" :entity_id g1 :list_id lid :action "delete" :data {:title "G1"}}]
                (subvec (events d) before)))))))
 
 
@@ -223,19 +223,19 @@
       (let [{:keys [lid c]} (seed d u)]
         (tx! d #(lists/delete-list! % u {:id lid}))
         (is (empty? (db/q d ["SELECT * FROM task"])))
-        (is (empty? (db/q d ["SELECT * FROM list_group"])))
+        (is (empty? (db/q d ["SELECT * FROM list_section"])))
         (let [before (events d)]
           (is (= #{} (:topics (tx! d #(lists/delete-task! % u {:id c})))))
           (is (= before (events d))))))))
 
 
-(deftest a-task-cannot-join-another-lists-group
+(deftest a-task-cannot-join-another-lists-section
   (with-user
     (fn [d u]
       (let [{:keys [g1]} (seed d u)
             other (:result (tx! d #(lists/create-list! % u {:title "Other"})))]
-        (is (thrown-with-msg? Exception #"group belongs to another list"
-              (tx! d #(lists/create-task! % u {:list-id other :group-id g1 :title "x"}))))))))
+        (is (thrown-with-msg? Exception #"section belongs to another list"
+              (tx! d #(lists/create-task! % u {:list-id other :section-id g1 :title "x"}))))))))
 
 
 (deftest missing-entities-are-not-found
@@ -243,11 +243,11 @@
     (fn [d u]
       (doseq [f [#(lists/update-list! % u {:id 99 :title "x"})
                  #(lists/archive-list! % u {:id 99})
-                 #(lists/update-group! % u {:id 99 :title "x"})
+                 #(lists/update-section! % u {:id 99 :title "x"})
                  #(lists/update-task! % u {:id 99 :title "x"})
                  #(lists/set-state! % u {:id 99 :state :completed})
-                 #(lists/place-task! % u {:id 99 :group-id nil :before nil})
-                 #(lists/create-group! % u {:list-id 99 :title "x"})
+                 #(lists/place-task! % u {:id 99 :section-id nil :before nil})
+                 #(lists/create-section! % u {:list-id 99 :title "x"})
                  #(lists/create-task! % u {:list-id 99 :title "x"})]]
         (is (= :chequer/not-found
                (:type (ex-data (try (tx! d f) (catch Exception e e))))))))))

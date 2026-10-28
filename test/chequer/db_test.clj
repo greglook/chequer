@@ -171,7 +171,7 @@
     (fn [d path]
       (db/migrate! d)
       (is (= latest (user-version d)))
-      (is (= #{"user" "event" "plan" "plan_group" "plan_task" "list" "list_group" "task" "search"
+      (is (= #{"user" "event" "plan" "plan_section" "plan_task" "list" "list_section" "task" "search"
                "session"}
              (table-names d)))
       (is (not (fs/exists? (str path ".pre-v" latest ".bak")))
@@ -277,58 +277,58 @@
                              (db/insert! tx :event {:instant 1 :user_id uid :entity_type "plan" :entity_id 1 :action "created"})))))))))
 
 
-(deftest plan-schema-enforces-same-plan-groups-and-cascades
+(deftest plan-schema-enforces-same-plan-sections-and-cascades
   (helpers/with-test-db
     (fn [d]
       (let [uid (:id (helpers/create-user! d "u"))
             plan #(db/insert! %1 :plan {:title %2 :created_at 1 :created_by uid :updated_at 1 :updated_by uid})
             task (fn [tx pid gid]
-                   (db/insert! tx :plan_task {:plan_id pid :group_id gid :rank 1.0 :title "t"
+                   (db/insert! tx :plan_task {:plan_id pid :section_id gid :rank 1.0 :title "t"
                                               :created_at 1 :created_by uid :updated_at 1 :updated_by uid}))
             {[p1 p2 g1 t1] :result} (db/with-tx [tx d]
                                       (let [p1 (plan tx "a")
                                             p2 (plan tx "b")
-                                            g1 (db/insert! tx :plan_group {:plan_id p1 :rank 1.0 :title "g"})]
+                                            g1 (db/insert! tx :plan_section {:plan_id p1 :rank 1.0 :title "g"})]
                                         [p1 p2 g1 (task tx p1 g1)]))]
-        (is (thrown-with-msg? Exception #"group belongs to another plan"
+        (is (thrown-with-msg? Exception #"section belongs to another plan"
               (db/with-tx [tx d] (task tx p2 g1))))
-        (is (thrown-with-msg? Exception #"group belongs to another plan"
+        (is (thrown-with-msg? Exception #"section belongs to another plan"
               (db/with-tx [tx d]
                 (jdbc/execute! tx ["UPDATE plan_task SET plan_id = ? WHERE id = ?" p2 t1]))))
-        (is (thrown-with-msg? Exception #"group belongs to another plan"
+        (is (thrown-with-msg? Exception #"section belongs to another plan"
               (db/with-tx [tx d]
-                (let [g2 (db/insert! tx :plan_group {:plan_id p2 :rank 1.0 :title "g"})]
-                  (jdbc/execute! tx ["UPDATE plan_task SET group_id = ? WHERE id = ?" g2 t1])))))
+                (let [g2 (db/insert! tx :plan_section {:plan_id p2 :rank 1.0 :title "g"})]
+                  (jdbc/execute! tx ["UPDATE plan_task SET section_id = ? WHERE id = ?" g2 t1])))))
         (db/with-tx [tx d] (jdbc/execute! tx ["DELETE FROM plan WHERE id = ?" p1]))
         (is (nil? (db/q1 d ["SELECT 1 FROM plan_task WHERE id = ?" t1])))
-        (is (nil? (db/q1 d ["SELECT 1 FROM plan_group WHERE plan_id = ?" p1])))))))
+        (is (nil? (db/q1 d ["SELECT 1 FROM plan_section WHERE plan_id = ?" p1])))))))
 
 
-(deftest list-schema-enforces-same-list-groups-state-check-and-cascades
+(deftest list-schema-enforces-same-list-sections-state-check-and-cascades
   (helpers/with-test-db
     (fn [d]
       (let [uid (:id (helpers/create-user! d "u"))
             lst #(db/insert! %1 :list {:title %2 :created_at 1 :created_by uid :updated_at 1 :updated_by uid})
             task (fn [tx lid gid & [state]]
-                   (db/insert! tx :task (cond-> {:list_id lid :group_id gid :rank 1.0 :title "t"
+                   (db/insert! tx :task (cond-> {:list_id lid :section_id gid :rank 1.0 :title "t"
                                                  :created_at 1 :created_by uid :updated_at 1 :updated_by uid}
                                           state (assoc :state state))))
             {[l1 l2 g1 t1] :result} (db/with-tx [tx d]
                                       (let [l1 (lst tx "a")
                                             l2 (lst tx "b")
-                                            g1 (db/insert! tx :list_group {:list_id l1 :rank 1.0 :title "g"})]
+                                            g1 (db/insert! tx :list_section {:list_id l1 :rank 1.0 :title "g"})]
                                         [l1 l2 g1 (task tx l1 g1)]))]
         (is (= "pending" (:state (db/q1 d ["SELECT state FROM task WHERE id = ?" t1]))) "state defaults to pending")
-        (is (thrown-with-msg? Exception #"group belongs to another list"
+        (is (thrown-with-msg? Exception #"section belongs to another list"
               (db/with-tx [tx d] (task tx l2 g1))))
-        (is (thrown-with-msg? Exception #"group belongs to another list"
+        (is (thrown-with-msg? Exception #"section belongs to another list"
               (db/with-tx [tx d]
                 (jdbc/execute! tx ["UPDATE task SET list_id = ? WHERE id = ?" l2 t1]))))
-        (is (thrown-with-msg? Exception #"group belongs to another list"
+        (is (thrown-with-msg? Exception #"section belongs to another list"
               (db/with-tx [tx d]
-                (let [g2 (db/insert! tx :list_group {:list_id l2 :rank 1.0 :title "g"})]
-                  (jdbc/execute! tx ["UPDATE task SET group_id = ? WHERE id = ?" g2 t1])))))
+                (let [g2 (db/insert! tx :list_section {:list_id l2 :rank 1.0 :title "g"})]
+                  (jdbc/execute! tx ["UPDATE task SET section_id = ? WHERE id = ?" g2 t1])))))
         (is (thrown? Exception (db/with-tx [tx d] (task tx l1 nil "bogus"))))
         (db/with-tx [tx d] (jdbc/execute! tx ["DELETE FROM list WHERE id = ?" l1]))
         (is (nil? (db/q1 d ["SELECT 1 FROM task WHERE id = ?" t1])))
-        (is (nil? (db/q1 d ["SELECT 1 FROM list_group WHERE list_id = ?" l1])))))))
+        (is (nil? (db/q1 d ["SELECT 1 FROM list_section WHERE list_id = ?" l1])))))))

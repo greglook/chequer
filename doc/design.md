@@ -29,7 +29,7 @@ _plan tasks_. These are patterns of tasks that are repeated over time, for
 example a packing list, a set of tasks for cleaning a house, how to maintain
 something, etc. These are not associated with any particular instant in time
 and may be edited and updated over time. The tasks may be arranged into
-groups within the plan.
+sections within the plan.
 
 Users don't actually check off the tasks in a plan; when they are ready to
 work on something, the user creates a _list_ which contains reified _tasks_.
@@ -53,9 +53,9 @@ list never changes that list.
   between two siblings uses their midpoint, so a reorder updates a single row.
   If the gap between neighbours becomes too small to split, the sibling set is
   renumbered `1, 2, 3, ...` in one transaction.
-- **Display order:** within a plan or list, ungrouped tasks are shown
-  first (ordered among themselves), followed by the groups in order, each
-  containing its tasks in order. Group order and ungrouped-task order are
+- **Display order:** within a plan or list, unsectioned tasks are shown
+  first (ordered among themselves), followed by the sections in order, each
+  containing its tasks in order. Section order and unsectioned-task order are
   independent sequences.
 - **Text:** titles are short single-line plain text. Descriptions support
   markdown and are sanitized when rendered to HTML.
@@ -78,22 +78,22 @@ Plans have the following properties:
 - `:plan/updated-at` (required) instant the plan was last modified
 - `:plan/updated-by` (required, ref) the user who last modified the plan
 
-Deleting a plan deletes its groups and plan tasks.
+Deleting a plan deletes its sections and plan tasks.
 
 
-### Plan Group
+### Plan Section
 
-A grouping of plan tasks within a plan.
+A section of plan tasks within a plan.
 
-Plan groups have the following properties:
+Plan sections have the following properties:
 
-- `:plan.group/id` (required) opaque unique numeric identifier for the group in storage
-- `:plan.group/plan` (required, ref) the id of the plan this group belongs to
-- `:plan.group/rank` (required) a numeric sort ordering for the group within the plan
-- `:plan.group/title` (required) a short one-line plain-text title for the group
-- `:plan.group/icon` a custom emoji icon to give the group
+- `:plan.section/id` (required) opaque unique numeric identifier for the section in storage
+- `:plan.section/plan` (required, ref) the id of the plan this section belongs to
+- `:plan.section/rank` (required) a numeric sort ordering for the section within the plan
+- `:plan.section/title` (required) a short one-line plain-text title for the section
+- `:plan.section/icon` a custom emoji icon to give the section
 
-Deleting a group deletes the plan tasks in it.
+Deleting a section deletes the plan tasks in it.
 
 
 ### Plan Task
@@ -105,8 +105,8 @@ Plan tasks have the following properties:
 
 - `:plan.task/id` (required) opaque unique numeric identifier for the task in storage
 - `:plan.task/plan` (required, ref) the id of the plan this task belongs to
-- `:plan.task/group` (optional, ref) the id of the plan group this task is in, if any; must belong to the same plan
-- `:plan.task/rank` (required) a numeric sort ordering for the task within the plan/group
+- `:plan.task/section` (optional, ref) the id of the plan section this task is in, if any; must belong to the same plan
+- `:plan.task/rank` (required) a numeric sort ordering for the task within the plan/section
 - `:plan.task/title` (required) a short one-line plain-text title indicating the task
 - `:plan.task/description` long-form text with a detailed description of the task, with support for markdown formatting
 - `:plan.task/icon` a custom emoji icon to give the task
@@ -140,23 +140,23 @@ Archiving is a manual action that hides the list from the main view. Archived
 lists remain readable, searchable, and editable, and may be unarchived (which
 clears `archived-at`).
 
-Deleting a list deletes its groups and tasks.
+Deleting a list deletes its sections and tasks.
 
 
-### List Group
+### List Section
 
-A grouping of tasks within a list.
+A section of tasks within a list.
 
-List groups have the following properties:
+List sections have the following properties:
 
-- `:list.group/id` (required) opaque unique numeric identifier for the group in storage
-- `:list.group/list` (required, ref) the id of the list this group belongs to
-- `:list.group/source` (optional, ref) the plan group this group was created from, if any; cleared if that plan group is deleted
-- `:list.group/rank` (required) a numeric sort ordering for the group within the list
-- `:list.group/title` (required) a short one-line plain-text title for the group
-- `:list.group/icon` a custom emoji icon to give the group
+- `:list.section/id` (required) opaque unique numeric identifier for the section in storage
+- `:list.section/list` (required, ref) the id of the list this section belongs to
+- `:list.section/source` (optional, ref) the plan section this section was created from, if any; cleared if that plan section is deleted
+- `:list.section/rank` (required) a numeric sort ordering for the section within the list
+- `:list.section/title` (required) a short one-line plain-text title for the section
+- `:list.section/icon` a custom emoji icon to give the section
 
-Deleting a group deletes the tasks in it. The UI confirms the deletion and
+Deleting a section deletes the tasks in it. The UI confirms the deletion and
 shows how many tasks will be removed.
 
 
@@ -169,9 +169,9 @@ Tasks have the following properties:
 
 - `:task/id` (required) opaque unique numeric identifier for the task in storage
 - `:task/list` (required, ref) the id of the list this task belongs to
-- `:task/group` (optional, ref) the id of the list group this task is in, if any; must belong to the same list
+- `:task/section` (optional, ref) the id of the list section this task is in, if any; must belong to the same list
 - `:task/source` (optional, ref) the plan task this task was created from, if any; cleared if that plan task is deleted
-- `:task/rank` (required) a numeric sort ordering for the task within the list/group
+- `:task/rank` (required) a numeric sort ordering for the task within the list/section
 - `:task/title` (required) a short one-line plain-text title indicating the task
 - `:task/description` long-form text with a detailed description of the task, with support for markdown formatting
 - `:task/icon` a custom emoji icon to give the task
@@ -260,7 +260,7 @@ Events have the following properties:
 - `:event/id` (required) opaque unique numeric identifier for the event in storage
 - `:event/instant` (required) time the event occurred
 - `:event/user` (required, ref) the user who caused the event
-- `:event/entity-type` (required) enumeration recording the type of entity the event is about, e.g. `plan`, `plan.group`, `plan.task`, `list`, `list.group`, `task`
+- `:event/entity-type` (required) enumeration recording the type of entity the event is about, e.g. `plan`, `plan.section`, `plan.task`, `list`, `list.section`, `task`
 - `:event/entity-id` (required) the numeric identifier of the entity acted upon
 - `:event/plan` (optional) the id of the plan the entity belongs to, for plan-side events
 - `:event/list` (optional) the id of the list the entity belongs to, for list-side events
@@ -270,7 +270,7 @@ Events have the following properties:
 
 `entity-id`, `plan`, and `list` are plain values, not foreign keys, so
 events outlive the entities they describe. A plan's or list's full history,
-including its groups and tasks, is a single indexed query on the context column.
+including its sections and tasks, is a single indexed query on the context column.
 
 Every change and the event that records it are written in the same SQLite
 transaction.
@@ -285,12 +285,12 @@ Plans can be added to a list when it is created or at any time afterwards.
 When several plans are added together they are processed one after another,
 in the order the user chose. For each plan:
 
-1. **Groups:** each plan group is matched to an existing list group by
-   normalized title (trimmed, case-insensitive). A new list group is created
-   if there's no match, appended to the end of the group order, and its
-   `source` is set to the plan group.
-2. **Tasks:** each plan task is placed in the list group matched in step
-   1, or left ungrouped if it has no group in the plan. The task is
+1. **Sections:** each plan section is matched to an existing list section by
+   normalized title (trimmed, case-insensitive). A new list section is created
+   if there's no match, appended to the end of the section order, and its
+   `source` is set to the plan section.
+2. **Tasks:** each plan task is placed in the list section matched in step
+   1, or left unsectioned if it has no section in the plan. The task is
    skipped if that destination already contains a task with the same
    normalized title. Otherwise a new `:pending` task is appended to the
    destination in the plan's order. Title, description, and icon are
@@ -301,7 +301,7 @@ to the list is a no-op for tasks that are still present.
 
 Adding a plan is one transaction, recorded as a single
 `:add-plan` event on the list, along with a `:create` event for each
-group and task created.
+section and task created.
 
 
 ## Live Updates
@@ -367,6 +367,6 @@ The following are explicitly out of scope for the first version:
 
 - Comments on tasks
 - Recurring or scheduled list creation from plans
-- Nesting beyond group → task (no subtasks)
+- Nesting beyond section → task (no subtasks)
 - Multiple assignees per task, and notifications of any kind
 - Per-entity permissions (all users can see and edit everything)

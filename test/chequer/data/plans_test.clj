@@ -82,79 +82,79 @@
 
 
 (defn- seed
-  "A plan with group g1 holding tasks a, b; ungrouped task c; group g2 holding d."
+  "A plan with section g1 holding tasks a, b; unsectioned task c; section g2 holding d."
   [d u]
   (:result
     (tx! d (fn [tx]
              (let [pid (plans/create-plan! tx u {:title "P"})
-                   g1 (plans/create-group! tx u {:plan-id pid :title "G1"})
-                   g2 (plans/create-group! tx u {:plan-id pid :title "G2" :icon "🧺"})
-                   a (plans/create-plan-task! tx u {:plan-id pid :group-id g1 :title "a" :icon "🧦"})
-                   b (plans/create-plan-task! tx u {:plan-id pid :group-id g1 :title "b"})
+                   g1 (plans/create-section! tx u {:plan-id pid :title "G1"})
+                   g2 (plans/create-section! tx u {:plan-id pid :title "G2" :icon "🧺"})
+                   a (plans/create-plan-task! tx u {:plan-id pid :section-id g1 :title "a" :icon "🧦"})
+                   b (plans/create-plan-task! tx u {:plan-id pid :section-id g1 :title "b"})
                    c (plans/create-plan-task! tx u {:plan-id pid :title "c" :description "desc"})
-                   dd (plans/create-plan-task! tx u {:plan-id pid :group-id g2 :title "d"})]
+                   dd (plans/create-plan-task! tx u {:plan-id pid :section-id g2 :title "d"})]
                {:pid pid :g1 g1 :g2 g2 :a a :b b :c c :dd dd})))))
 
 
 (defn- shape
-  "The display order of a loaded plan as [ungrouped-titles [group-title task-titles]...]."
-  [{:keys [ungrouped groups]}]
-  [(mapv :plan.task/title ungrouped)
-   (mapv (fn [{:keys [group tasks]}] [(:plan.group/title group) (mapv :plan.task/title tasks)]) groups)])
+  "The display order of a loaded plan as [unsectioned-titles [section-title task-titles]...]."
+  [{:keys [unsectioned sections]}]
+  [(mapv :plan.task/title unsectioned)
+   (mapv (fn [{:keys [section tasks]}] [(:plan.section/title section) (mapv :plan.task/title tasks)]) sections)])
 
 
-(deftest load-plan-puts-ungrouped-tasks-first-then-groups-in-order
+(deftest load-plan-puts-unsectioned-tasks-first-then-sections-in-order
   (with-user
     (fn [d u]
       (let [{:keys [pid a]} (seed d u)
             loaded (plans/load-plan d pid)]
         (is (= [["c"] [["G1" ["a" "b"]] ["G2" ["d"]]]] (shape loaded)))
         (is (= {:plan.task/id a :plan.task/plan pid :plan.task/icon "🧦"}
-               (select-keys (first (:tasks (first (:groups loaded))))
+               (select-keys (first (:tasks (first (:sections loaded))))
                             [:plan.task/id :plan.task/plan :plan.task/icon])))))))
 
 
-(deftest moving-groups-and-tasks-changes-display-order
+(deftest moving-sections-and-tasks-changes-display-order
   (with-user
     (fn [d u]
       (let [{:keys [pid g1 g2 a b c dd]} (seed d u)]
-        (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/move-group! % u {:id g2 :direction :up})))))
-        (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/place-plan-task! % u {:id b :group-id g1 :before a})))))
-        (tx! d #(plans/place-plan-task! % u {:id dd :group-id g2 :before nil}))
+        (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/move-section! % u {:id g2 :direction :up})))))
+        (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/place-plan-task! % u {:id b :section-id g1 :before a})))))
+        (tx! d #(plans/place-plan-task! % u {:id dd :section-id g2 :before nil}))
         (is (= [["c"] [["G2" ["d"]] ["G1" ["b" "a"]]]] (shape (plans/load-plan d pid))))
-        (tx! d #(plans/place-plan-task! % u {:id a :group-id g2 :before dd}))
-        (tx! d #(plans/place-plan-task! % u {:id c :group-id g1 :before nil}))
-        (tx! d #(plans/place-plan-task! % u {:id b :group-id nil :before nil}))
+        (tx! d #(plans/place-plan-task! % u {:id a :section-id g2 :before dd}))
+        (tx! d #(plans/place-plan-task! % u {:id c :section-id g1 :before nil}))
+        (tx! d #(plans/place-plan-task! % u {:id b :section-id nil :before nil}))
         (is (= [["b"] [["G2" ["a" "d"]] ["G1" ["c"]]]] (shape (plans/load-plan d pid)))
-            "placing a task in another group, or none, moves it there")
+            "placing a task in another section, or none, moves it there")
         (is (= (repeat 7 "create") (mapv :action (events d)))
             "reordering records no events")))))
 
 
-(deftest updating-groups-and-tasks-records-diffs
+(deftest updating-sections-and-tasks-records-diffs
   (with-user
     (fn [d u]
       (let [{:keys [pid g1 a]} (seed d u)
             before (count (events d))]
-        (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/update-group! % u {:id g1 :title "Clothes" :icon "👕"})))))
+        (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/update-section! % u {:id g1 :title "Clothes" :icon "👕"})))))
         (tx! d #(plans/update-plan-task! % u {:id a :title "a2" :icon "" :description "x"}))
-        (is (= [{:entity_type "plan.group" :entity_id g1 :plan_id pid :action "update"
+        (is (= [{:entity_type "plan.section" :entity_id g1 :plan_id pid :action "update"
                  :data {:title ["G1" "Clothes"] :icon [nil "👕"]}}
                 {:entity_type "plan.task" :entity_id a :plan_id pid :action "update"
                  :data {:title ["a" "a2"] :description [nil "x"] :icon ["🧦" nil]}}]
                (subvec (events d) before)))))))
 
 
-(deftest deleting-a-group-deletes-and-logs-its-tasks
+(deftest deleting-a-section-deletes-and-logs-its-tasks
   (with-user
     (fn [d u]
       (let [{:keys [pid g1 a b]} (seed d u)
             before (count (events d))]
-        (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/delete-group! % u {:id g1})))))
+        (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/delete-section! % u {:id g1})))))
         (is (= [["c"] [["G2" ["d"]]]] (shape (plans/load-plan d pid))))
         (is (= [{:entity_type "plan.task" :entity_id a :plan_id pid :action "delete" :data {:title "a"}}
                 {:entity_type "plan.task" :entity_id b :plan_id pid :action "delete" :data {:title "b"}}
-                {:entity_type "plan.group" :entity_id g1 :plan_id pid :action "delete" :data {:title "G1"}}]
+                {:entity_type "plan.section" :entity_id g1 :plan_id pid :action "delete" :data {:title "G1"}}]
                (subvec (events d) before)))))))
 
 
@@ -164,33 +164,33 @@
       (let [{:keys [pid c]} (seed d u)]
         (tx! d #(plans/delete-plan! % u {:id pid}))
         (is (empty? (db/q d ["SELECT * FROM plan_task"])))
-        (is (empty? (db/q d ["SELECT * FROM plan_group"])))
+        (is (empty? (db/q d ["SELECT * FROM plan_section"])))
         (let [before (events d)]
           (is (= #{} (:topics (tx! d #(plans/delete-plan-task! % u {:id c})))))
           (is (= before (events d)) "deleting a missing task is a no-op, so a second tab's delete is harmless"))))))
 
 
-(deftest a-task-cannot-join-another-plans-group
+(deftest a-task-cannot-join-another-plans-section
   (with-user
     (fn [d u]
       (let [{:keys [g1]} (seed d u)
             other (:result (tx! d #(plans/create-plan! % u {:title "Other"})))]
-        (is (thrown-with-msg? Exception #"group belongs to another plan"
-              (tx! d #(plans/create-plan-task! % u {:plan-id other :group-id g1 :title "x"}))))
+        (is (thrown-with-msg? Exception #"section belongs to another plan"
+              (tx! d #(plans/create-plan-task! % u {:plan-id other :section-id g1 :title "x"}))))
         (let [x (:result (tx! d #(plans/create-plan-task! % u {:plan-id other :title "x"})))]
-          (is (thrown-with-msg? Exception #"group belongs to another plan"
-                (tx! d #(plans/place-plan-task! % u {:id x :group-id g1 :before nil})))))))))
+          (is (thrown-with-msg? Exception #"section belongs to another plan"
+                (tx! d #(plans/place-plan-task! % u {:id x :section-id g1 :before nil})))))))))
 
 
 (deftest missing-entities-are-not-found
   (with-user
     (fn [d u]
       (doseq [f [#(plans/update-plan! % u {:id 99 :title "x"})
-                 #(plans/update-group! % u {:id 99 :title "x"})
+                 #(plans/update-section! % u {:id 99 :title "x"})
                  #(plans/update-plan-task! % u {:id 99 :title "x"})
-                 #(plans/move-group! % u {:id 99 :direction :up})
-                 #(plans/place-plan-task! % u {:id 99 :group-id nil :before nil})
-                 #(plans/create-group! % u {:plan-id 99 :title "x"})]]
+                 #(plans/move-section! % u {:id 99 :direction :up})
+                 #(plans/place-plan-task! % u {:id 99 :section-id nil :before nil})
+                 #(plans/create-section! % u {:plan-id 99 :title "x"})]]
         (is (= :chequer/not-found
                (:type (ex-data (try (tx! d f) (catch Exception e e))))))))))
 

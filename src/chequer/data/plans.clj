@@ -1,5 +1,5 @@
 (ns chequer.data.plans
-  "Plans, plan groups and plan tasks: validation, mutations (each logged as events) and loading."
+  "Plans, plan sections and plan tasks: validation, mutations (each logged as events) and loading."
   (:require
     [chequer.db :as db]
     [chequer.event :as event]
@@ -86,7 +86,7 @@
   {:title Title :description Description :icon Icon})
 
 
-(def ^:private group-schemas
+(def ^:private section-schemas
   {:title Title :icon Icon})
 
 
@@ -108,20 +108,20 @@
    :plan/updated-by (:updated_by r)})
 
 
-(defn- row->group
+(defn- row->section
   [r]
-  {:plan.group/id (:id r)
-   :plan.group/plan (:plan_id r)
-   :plan.group/rank (:rank r)
-   :plan.group/title (:title r)
-   :plan.group/icon (:icon r)})
+  {:plan.section/id (:id r)
+   :plan.section/plan (:plan_id r)
+   :plan.section/rank (:rank r)
+   :plan.section/title (:title r)
+   :plan.section/icon (:icon r)})
 
 
 (defn- row->task
   [r]
   {:plan.task/id (:id r)
    :plan.task/plan (:plan_id r)
-   :plan.task/group (:group_id r)
+   :plan.task/section (:section_id r)
    :plan.task/rank (:rank r)
    :plan.task/title (:title r)
    :plan.task/description (:description r)
@@ -164,7 +164,7 @@
 
 (defn- touch-plan!
   "Touch the topic of plan pid, which every change to it touches, and of the parts given:
-  :header (the plan's row), :structure (its groups, and which tasks are in it and where) or
+  :header (the plan's row), :structure (its sections, and which tasks are in it and where) or
   a task id (that task's row)."
   [pid & parts]
   (db/touch! [:plan pid])
@@ -215,7 +215,7 @@
 
 
 (defn delete-plan!
-  "Delete plan {:id}, with its groups and tasks. Deleting a missing plan does nothing."
+  "Delete plan {:id}, with its sections and tasks. Deleting a missing plan does nothing."
   [tx user {:keys [id]}]
   (when-let [old (fetch-row tx "plan" id)]
     (event/record! tx {:user user :entity-type "plan" :entity-id id :plan id
@@ -226,41 +226,41 @@
   nil)
 
 
-;; ## Groups
+;; ## Sections
 
-(defn create-group!
-  "Create a group in plan :plan-id from {:title :icon}, appended after the others. Returns its id."
+(defn create-section!
+  "Create a section in plan :plan-id from {:title :icon}, appended after the others. Returns its id."
   [tx user {:keys [plan-id] :as attrs}]
   (fetch-existing tx "plan" plan-id)
-  (let [v (clean group-schemas (merge {:title nil} attrs))
-        id (db/insert! tx :plan_group (assoc v
-                                             :plan_id plan-id
-                                             :rank (next-rank tx "plan_group" ["plan_id = ?" plan-id])))]
-    (event/record! tx {:user user :entity-type "plan.group" :entity-id id :plan plan-id
+  (let [v (clean section-schemas (merge {:title nil} attrs))
+        id (db/insert! tx :plan_section (assoc v
+                                               :plan_id plan-id
+                                               :rank (next-rank tx "plan_section" ["plan_id = ?" plan-id])))]
+    (event/record! tx {:user user :entity-type "plan.section" :entity-id id :plan plan-id
                        :action :create :data {:title (:title v)}})
     (touch-plan! plan-id :structure)
     id))
 
 
-(defn update-group!
+(defn update-section!
   "Update the given keys of {:id :title :icon}."
   [tx user attrs]
-  (update-entity! tx user {:table "plan_group" :schemas group-schemas :entity-type "plan.group"
+  (update-entity! tx user {:table "plan_section" :schemas section-schemas :entity-type "plan.section"
                            :plan-id-of :plan_id :part-of (constantly :structure)}
                   attrs)
   nil)
 
 
-(defn delete-group!
-  "Delete group {:id} and its tasks, logging a :delete event for each. A missing group does nothing."
+(defn delete-section!
+  "Delete section {:id} and its tasks, logging a :delete event for each. A missing section does nothing."
   [tx user {:keys [id]}]
-  (when-let [{pid :plan_id :as old} (fetch-row tx "plan_group" id)]
-    (doseq [t (jdbc/fetch tx ["SELECT id, title FROM plan_task WHERE group_id = ? ORDER BY rank, id" id])]
+  (when-let [{pid :plan_id :as old} (fetch-row tx "plan_section" id)]
+    (doseq [t (jdbc/fetch tx ["SELECT id, title FROM plan_task WHERE section_id = ? ORDER BY rank, id" id])]
       (event/record! tx {:user user :entity-type "plan.task" :entity-id (:id t) :plan pid
                          :action :delete :data {:title (:title t)}}))
-    (event/record! tx {:user user :entity-type "plan.group" :entity-id id :plan pid
+    (event/record! tx {:user user :entity-type "plan.section" :entity-id id :plan pid
                        :action :delete :data {:title (:title old)}})
-    (jdbc/execute! tx ["DELETE FROM plan_group WHERE id = ?" id])
+    (jdbc/execute! tx ["DELETE FROM plan_section WHERE id = ?" id])
     (touch-plan! pid :structure))
   nil)
 
@@ -273,28 +273,28 @@
   nil)
 
 
-(defn move-group!
-  "Move group {:id} one place in {:direction :up|:down}."
+(defn move-section!
+  "Move section {:id} one place in {:direction :up|:down}."
   [tx _user {:keys [id] :as attrs}]
-  (move-entity! tx {:table "plan_group"
+  (move-entity! tx {:table "plan_section"
                     :scope-sql (fn [g] ["plan_id = ?" (:plan_id g)])}
-                attrs (fetch-existing tx "plan_group" id)))
+                attrs (fetch-existing tx "plan_section" id)))
 
 
 ;; ## Plan tasks
 
 (defn create-plan-task!
-  "Create a task in plan :plan-id (and group :group-id, if given) from {:title :description
+  "Create a task in plan :plan-id (and section :section-id, if given) from {:title :description
   :icon}, appended after its siblings. Returns its id."
-  [tx user {:keys [plan-id group-id] :as attrs}]
+  [tx user {:keys [plan-id section-id] :as attrs}]
   (fetch-existing tx "plan" plan-id)
   (let [v (clean task-schemas (merge {:title nil} attrs))
         now (time/now-ms)
         id (db/insert! tx :plan_task
                        (assoc v
                               :plan_id plan-id
-                              :group_id group-id
-                              :rank (next-rank tx "plan_task" ["plan_id = ? AND group_id IS ?" plan-id group-id])
+                              :section_id section-id
+                              :rank (next-rank tx "plan_task" ["plan_id = ? AND section_id IS ?" plan-id section-id])
                               :created_at now :created_by (:id user)
                               :updated_at now :updated_by (:id user)))]
     (event/record! tx {:user user :entity-type "plan.task" :entity-id id :plan plan-id
@@ -323,27 +323,27 @@
   nil)
 
 
-(defn place-in-group!
-  "Move task {:id} of table into group :group-id (nil for none) of the same plan or list,
-  named by its parent-col, just before task :before of that group (or last, when nil).
+(defn place-in-section!
+  "Move task {:id} of table into section :section-id (nil for none) of the same plan or list,
+  named by its parent-col, just before task :before of that section (or last, when nil).
   Returns the task's row as it was. Reordering records no event."
-  [tx {:keys [table group-table parent-col]} {:keys [id group-id before]}]
+  [tx {:keys [table section-table parent-col]} {:keys [id section-id before]}]
   (let [old (fetch-existing tx table id)]
-    (when group-id
-      (fetch-existing tx group-table group-id))
+    (when section-id
+      (fetch-existing tx section-table section-id))
     (rank/place tx {:table table
-                    :scope-sql [(str (name parent-col) " = ? AND group_id IS ?") (get old parent-col) group-id]
+                    :scope-sql [(str (name parent-col) " = ? AND section_id IS ?") (get old parent-col) section-id]
                     :id id :before before})
-    (when (not= group-id (:group_id old))
-      (update-row! tx table id {:group_id group-id}))
+    (when (not= section-id (:section_id old))
+      (update-row! tx table id {:section_id section-id}))
     old))
 
 
 (defn place-plan-task!
-  "Move plan task {:id} into group :group-id (nil for none) of its plan, just before task
-  :before of that group (or last, when nil)."
+  "Move plan task {:id} into section :section-id (nil for none) of its plan, just before task
+  :before of that section (or last, when nil)."
   [tx _user attrs]
-  (let [{pid :plan_id} (place-in-group! tx {:table "plan_task" :group-table "plan_group" :parent-col :plan_id} attrs)]
+  (let [{pid :plan_id} (place-in-section! tx {:table "plan_task" :section-table "plan_section" :parent-col :plan_id} attrs)]
     (touch-plan! pid :structure))
   nil)
 
@@ -363,30 +363,30 @@
 
 
 (defn load-plan-header
-  "Plan id without its groups and tasks, or nil."
+  "Plan id without its sections and tasks, or nil."
   [db id]
   (some-> (db/q1 db ["SELECT * FROM plan WHERE id = ?" id]) row->plan))
 
 
 (defn load-plan-structure
-  "{:ungrouped [task-id] :groups [{:group g :task-ids [...]}]} for plan id in display order,
+  "{:unsectioned [task-id] :sections [{:section g :task-ids [...]}]} for plan id in display order,
   or nil."
   [db id]
   (when (db/q1 db ["SELECT id FROM plan WHERE id = ?" id])
-    (let [groups (map row->group (db/q db ["SELECT * FROM plan_group WHERE plan_id = ? ORDER BY rank, id" id]))
-          task-ids (update-vals (group-by :group_id (db/q db ["SELECT id, group_id FROM plan_task WHERE plan_id = ? ORDER BY rank, id" id]))
+    (let [sections (map row->section (db/q db ["SELECT * FROM plan_section WHERE plan_id = ? ORDER BY rank, id" id]))
+          task-ids (update-vals (group-by :section_id (db/q db ["SELECT id, section_id FROM plan_task WHERE plan_id = ? ORDER BY rank, id" id]))
                                 #(mapv :id %))]
-      {:ungrouped (get task-ids nil [])
-       :groups (mapv (fn [g] {:group g :task-ids (get task-ids (:plan.group/id g) [])}) groups)})))
+      {:unsectioned (get task-ids nil [])
+       :sections (mapv (fn [g] {:section g :task-ids (get task-ids (:plan.section/id g) [])}) sections)})))
 
 
 (defn load-plan
-  "{:plan p :ungrouped [tasks] :groups [{:group g :tasks [...]}]} in display order, or nil."
+  "{:plan p :unsectioned [tasks] :sections [{:section g :tasks [...]}]} in display order, or nil."
   [db id]
   (when-let [p (db/q1 db ["SELECT * FROM plan WHERE id = ?" id])]
-    (let [groups (map row->group (db/q db ["SELECT * FROM plan_group WHERE plan_id = ? ORDER BY rank, id" id]))
-          tasks (group-by :plan.task/group
+    (let [sections (map row->section (db/q db ["SELECT * FROM plan_section WHERE plan_id = ? ORDER BY rank, id" id]))
+          tasks (group-by :plan.task/section
                           (map row->task (db/q db ["SELECT * FROM plan_task WHERE plan_id = ? ORDER BY rank, id" id])))]
       {:plan (row->plan p)
-       :ungrouped (vec (get tasks nil))
-       :groups (mapv (fn [g] {:group g :tasks (vec (get tasks (:plan.group/id g)))}) groups)})))
+       :unsectioned (vec (get tasks nil))
+       :sections (mapv (fn [g] {:section g :tasks (vec (get tasks (:plan.section/id g)))}) sections)})))

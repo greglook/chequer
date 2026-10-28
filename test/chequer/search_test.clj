@@ -82,15 +82,15 @@
     (fn [d]
       (let [u (helpers/create-user! d "greg")
             pid (tx d (plans/create-plan! tx u {:title "Packing"}))
-            gid (tx d (plans/create-group! tx u {:plan-id pid :title "Bags"}))
-            _ (tx d (plans/create-plan-task! tx u {:plan-id pid :group-id gid :title "Charger"}))
+            gid (tx d (plans/create-section! tx u {:plan-id pid :title "Bags"}))
+            _ (tx d (plans/create-plan-task! tx u {:plan-id pid :section-id gid :title "Charger"}))
             keep-id (tx d (plans/create-plan-task! tx u {:plan-id pid :title "Charger cable"}))
             lid (tx d (lists/create-list! tx u {:title "Trip"}))
             tid (tx d (lists/create-task! tx u {:list-id lid :title "Socks"}))]
         (tx d (lists/delete-task! tx u {:id tid}))
         (is (empty? (found d "socks")))
-        (testing "deleting a group removes its tasks through the cascade"
-          (tx d (plans/delete-group! tx u {:id gid}))
+        (testing "deleting a section removes its tasks through the cascade"
+          (tx d (plans/delete-section! tx u {:id gid}))
           (is (= [["plan.task" keep-id]] (found d "charger"))))
         (tx d (lists/create-task! tx u {:list-id lid :title "Shoes"}))
         (tx d (lists/delete-list! tx u {:id lid}))
@@ -105,11 +105,13 @@
     (try
       (is (= "create-search-index" (:name search-migration)))
       (db/migrate! d (vec before))
+      ;; Rows are inserted directly, since the data functions write the latest schema.
       (let [u (helpers/create-user! d "greg")
-            pid (tx d (plans/create-plan! tx u {:title "Packing"}))
-            ptid (tx d (plans/create-plan-task! tx u {:plan-id pid :title "Charger"}))
-            lid (tx d (lists/create-list! tx u {:title "Trip"}))
-            tid (tx d (lists/create-task! tx u {:list-id lid :title "Charger"}))]
+            stamps {:created_at 0 :created_by (:id u) :updated_at 0 :updated_by (:id u)}
+            pid (tx d (db/insert! tx :plan (assoc stamps :title "Packing")))
+            ptid (tx d (db/insert! tx :plan_task (assoc stamps :plan_id pid :rank 1.0 :title "Charger")))
+            lid (tx d (db/insert! tx :list (assoc stamps :title "Trip")))
+            tid (tx d (db/insert! tx :task (assoc stamps :list_id lid :rank 1.0 :title "Charger")))]
         (db/migrate! d (conj (vec before) search-migration))
         (is (= #{["plan" pid "plan" pid "Packing" nil]
                  ["plan.task" ptid "plan" pid "Charger" nil]

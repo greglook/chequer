@@ -308,7 +308,7 @@
         body))
 
 
-;; ## Collapsible groups
+;; ## Collapsible sections
 
 (def ^:private chevron-icon
   (raw (str "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
@@ -321,7 +321,7 @@
 
 
 (defn collapsible
-  "The attributes of a group's root element, element-id: declares its collapse signal,
+  "The attributes of a section's root element, element-id: declares its collapse signal,
   initially what this browser stored for it in localStorage, and adds the collapsed class
   while it's set. Collapsing is per-browser state that the server never sees."
   [element-id]
@@ -331,17 +331,17 @@
 
 
 (defn collapse-toggle
-  "A button in the header of the group element-id, holding the group's icon and title and
+  "A button in the header of the section element-id, holding the section's icon and title and
   its task count while it's collapsed, that collapses or expands it and remembers that in
   localStorage."
   [element-id icon title task-count]
   (let [signal (str "$" (collapse-signal element-id))
         k (str "'chequer:collapsed:" element-id "'")]
-    [:button.group-toggle {:type "button"
-                           :data-attr:aria-expanded (str "String(!" signal ")")
-                           :data-attr:title (str signal " ? 'Expand group' : 'Collapse group'")
-                           :data-on:click (str signal " = !" signal "; "
-                                               signal " ? localStorage.setItem(" k ", '1') : localStorage.removeItem(" k ")")}
+    [:button.section-toggle {:type "button"
+                             :data-attr:aria-expanded (str "String(!" signal ")")
+                             :data-attr:title (str signal " ? 'Expand section' : 'Collapse section'")
+                             :data-on:click (str signal " = !" signal "; "
+                                                 signal " ? localStorage.setItem(" k ", '1') : localStorage.removeItem(" k ")")}
      [:span.chevron chevron-icon]
      [:span.icon icon]
      [:span.title title]
@@ -420,9 +420,9 @@
 
 (defn task-list-attrs
   "The attributes of a list of tasks that public/js/drag.js lets tasks be dragged within and
-  between: group-id is the group the list holds, nil for the ungrouped tasks."
-  [group-id]
-  {:data-task-list "" :data-group (str group-id)})
+  between: section-id is the section the list holds, nil for the unsectioned tasks."
+  [section-id]
+  {:data-task-list "" :data-section (str section-id)})
 
 
 (defn draggable
@@ -430,7 +430,7 @@
   to path's move route."
   [id path]
   {:data-task-id (str id)
-   :data-on:task-drop (str "@post('" path "/move?group=' + evt.detail.group + '&before=' + evt.detail.before)")})
+   :data-on:task-drop (str "@post('" path "/move?section=' + evt.detail.section + '&before=' + evt.detail.before)")})
 
 
 (def drag-grip
@@ -479,7 +479,7 @@
              (= :chequer/invalid (:type data)) (errors-fragment (or (:errors-id data) errors-id) (:errors data))
              (= :chequer/not-found (:type data)) (text-response 404 "Not found")
              (= :chequer/bad-request (:type data)) (text-response 400 "Bad request")
-             (re-find #"group belongs to another (plan|list)" (str (ex-message e))) (text-response 400 "Bad request")
+             (re-find #"section belongs to another (plan|list)" (str (ex-message e))) (text-response 400 "Bad request")
              :else (throw e)))))
      (text-response 400 "Bad request"))))
 
@@ -493,10 +493,10 @@
 
 
 (defn place
-  "POST .../move?group=<id>&before=<id>, placing the task with (place-fn tx user {:id
-  :group-id :before}); a blank group means ungrouped and a blank before means last."
+  "POST .../move?section=<id>&before=<id>, placing the task with (place-fn tx user {:id
+  :section-id :before}); a blank section means unsectioned and a blank before means last."
   [req place-fn]
   (mutate req nil (fn [tx user _]
                     (place-fn tx user {:id (get-in req [:params :id])
-                                       :group-id (parse-id (query-param req "group"))
+                                       :section-id (parse-id (query-param req "section"))
                                        :before (parse-id (query-param req "before"))}))))

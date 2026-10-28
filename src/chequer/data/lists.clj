@@ -1,5 +1,5 @@
 (ns chequer.data.lists
-  "Lists, list groups and tasks: validation, mutations (each logged as events), task states and
+  "Lists, list sections and tasks: validation, mutations (each logged as events), task states and
   derived values."
   (:require
     [chequer.data.plans :as plans]
@@ -24,7 +24,7 @@
   {:title plans/Title :description plans/Description :icon plans/Icon :due_at Instant})
 
 
-(def ^:private group-schemas
+(def ^:private section-schemas
   {:title plans/Title :icon plans/Icon})
 
 
@@ -53,21 +53,21 @@
    :list/updated-by (:updated_by r)})
 
 
-(defn- row->group
+(defn- row->section
   [r]
-  {:list.group/id (:id r)
-   :list.group/list (:list_id r)
-   :list.group/source (:source_id r)
-   :list.group/rank (:rank r)
-   :list.group/title (:title r)
-   :list.group/icon (:icon r)})
+  {:list.section/id (:id r)
+   :list.section/list (:list_id r)
+   :list.section/source (:source_id r)
+   :list.section/rank (:rank r)
+   :list.section/title (:title r)
+   :list.section/icon (:icon r)})
 
 
 (defn- row->task
   [r]
   {:task/id (:id r)
    :task/list (:list_id r)
-   :task/group (:group_id r)
+   :task/section (:section_id r)
    :task/source (:source_id r)
    :task/rank (:rank r)
    :task/title (:title r)
@@ -86,7 +86,7 @@
 
 (defn- touch-list!
   "Touch the topic of list lid, which every change to it touches, and of the parts given:
-  :header (the list's row and task counts), :structure (its groups, and which tasks are in
+  :header (the list's row and task counts), :structure (its sections, and which tasks are in
   it and where) or a task id (that task's row)."
   [lid & parts]
   (db/touch! [:list lid])
@@ -152,7 +152,7 @@
 
 
 (defn delete-list!
-  "Delete list {:id}, with its groups and tasks. Deleting a missing list does nothing."
+  "Delete list {:id}, with its sections and tasks. Deleting a missing list does nothing."
   [tx user {:keys [id]}]
   (when-let [old (plans/fetch-row tx "list" id)]
     (record! tx user "list" id id :delete {:title (:title old)})
@@ -186,68 +186,68 @@
   (set-archived! tx user id nil :unarchive))
 
 
-;; ## Groups
+;; ## Sections
 
-(defn create-group!
-  "Create a group in list :list-id from {:title :icon}, appended after the others. :source-id,
-  if given, is the plan group it was copied from. Returns its id."
+(defn create-section!
+  "Create a section in list :list-id from {:title :icon}, appended after the others. :source-id,
+  if given, is the plan section it was copied from. Returns its id."
   [tx user {:keys [list-id source-id] :as attrs}]
   (plans/fetch-existing tx "list" list-id)
-  (let [v (plans/clean group-schemas (merge {:title nil} attrs))
-        id (db/insert! tx :list_group (assoc v
-                                             :list_id list-id
-                                             :source_id source-id
-                                             :rank (plans/next-rank tx "list_group" ["list_id = ?" list-id])))]
-    (record! tx user "list.group" id list-id :create {:title (:title v)})
+  (let [v (plans/clean section-schemas (merge {:title nil} attrs))
+        id (db/insert! tx :list_section (assoc v
+                                               :list_id list-id
+                                               :source_id source-id
+                                               :rank (plans/next-rank tx "list_section" ["list_id = ?" list-id])))]
+    (record! tx user "list.section" id list-id :create {:title (:title v)})
     (touch-list! list-id :structure)
     id))
 
 
-(defn update-group!
+(defn update-section!
   "Update the given keys of {:id :title :icon}."
   [tx user attrs]
-  (update-entity! tx user {:table "list_group" :schemas group-schemas :entity-type "list.group"
+  (update-entity! tx user {:table "list_section" :schemas section-schemas :entity-type "list.section"
                            :list-id-of :list_id :part-of (constantly :structure)}
                   attrs)
   nil)
 
 
-(defn delete-group!
-  "Delete group {:id} and its tasks, logging a :delete event for each. A missing group does nothing."
+(defn delete-section!
+  "Delete section {:id} and its tasks, logging a :delete event for each. A missing section does nothing."
   [tx user {:keys [id]}]
-  (when-let [{lid :list_id :as old} (plans/fetch-row tx "list_group" id)]
-    (doseq [t (jdbc/fetch tx ["SELECT id, title FROM task WHERE group_id = ? ORDER BY rank, id" id])]
+  (when-let [{lid :list_id :as old} (plans/fetch-row tx "list_section" id)]
+    (doseq [t (jdbc/fetch tx ["SELECT id, title FROM task WHERE section_id = ? ORDER BY rank, id" id])]
       (record! tx user "task" (:id t) lid :delete {:title (:title t)}))
-    (record! tx user "list.group" id lid :delete {:title (:title old)})
-    (jdbc/execute! tx ["DELETE FROM list_group WHERE id = ?" id])
+    (record! tx user "list.section" id lid :delete {:title (:title old)})
+    (jdbc/execute! tx ["DELETE FROM list_section WHERE id = ?" id])
     (touch-list! lid :header :structure))
   nil)
 
 
-(defn move-group!
-  "Move group {:id} one place in {:direction :up|:down}."
+(defn move-section!
+  "Move section {:id} one place in {:direction :up|:down}."
   [tx _user {:keys [id] :as attrs}]
-  (move-entity! tx {:table "list_group"
+  (move-entity! tx {:table "list_section"
                     :scope-sql (fn [g] ["list_id = ?" (:list_id g)])}
-                attrs (plans/fetch-existing tx "list_group" id)))
+                attrs (plans/fetch-existing tx "list_section" id)))
 
 
 ;; ## Tasks
 
 (defn create-task!
-  "Create a pending task in list :list-id (and group :group-id, if given) from the task
+  "Create a pending task in list :list-id (and section :section-id, if given) from the task
   attributes, appended after its siblings. :source-id, if given, is the plan task it was
   copied from. Returns its id."
-  [tx user {:keys [list-id group-id source-id] :as attrs}]
+  [tx user {:keys [list-id section-id source-id] :as attrs}]
   (plans/fetch-existing tx "list" list-id)
   (let [v (plans/clean task-schemas (merge {:title nil} attrs))
         now (time/now-ms)
         id (db/insert! tx :task
                        (assoc v
                               :list_id list-id
-                              :group_id group-id
+                              :section_id section-id
                               :source_id source-id
-                              :rank (plans/next-rank tx "task" ["list_id = ? AND group_id IS ?" list-id group-id])
+                              :rank (plans/next-rank tx "task" ["list_id = ? AND section_id IS ?" list-id section-id])
                               :created_at now :created_by (:id user)
                               :updated_at now :updated_by (:id user)))]
     (record! tx user "task" id list-id :create {:title (:title v)})
@@ -285,10 +285,10 @@
 
 
 (defn place-task!
-  "Move task {:id} into group :group-id (nil for none) of its list, just before task
-  :before of that group (or last, when nil)."
+  "Move task {:id} into section :section-id (nil for none) of its list, just before task
+  :before of that section (or last, when nil)."
   [tx _user attrs]
-  (let [{lid :list_id} (plans/place-in-group! tx {:table "task" :group-table "list_group" :parent-col :list_id} attrs)]
+  (let [{lid :list_id} (plans/place-in-section! tx {:table "task" :section-table "list_section" :parent-col :list_id} attrs)]
     (touch-list! lid :structure))
   nil)
 
@@ -356,27 +356,27 @@
 
 
 (defn load-list-structure
-  "{:ungrouped [task-id] :groups [{:group g :task-ids [...]}]} for list id in display order,
+  "{:unsectioned [task-id] :sections [{:section g :task-ids [...]}]} for list id in display order,
   or nil."
   [db id]
   (when (db/q1 db ["SELECT id FROM list WHERE id = ?" id])
-    (let [groups (map row->group (db/q db ["SELECT * FROM list_group WHERE list_id = ? ORDER BY rank, id" id]))
-          task-ids (update-vals (group-by :group_id (db/q db ["SELECT id, group_id FROM task WHERE list_id = ? ORDER BY rank, id" id]))
+    (let [sections (map row->section (db/q db ["SELECT * FROM list_section WHERE list_id = ? ORDER BY rank, id" id]))
+          task-ids (update-vals (group-by :section_id (db/q db ["SELECT id, section_id FROM task WHERE list_id = ? ORDER BY rank, id" id]))
                                 #(mapv :id %))]
-      {:ungrouped (get task-ids nil [])
-       :groups (mapv (fn [g] {:group g :task-ids (get task-ids (:list.group/id g) [])}) groups)})))
+      {:unsectioned (get task-ids nil [])
+       :sections (mapv (fn [g] {:section g :task-ids (get task-ids (:list.section/id g) [])}) sections)})))
 
 
 (defn load-list
-  "{:list l :ungrouped [tasks] :groups [{:group g :tasks [...]}]} in display order, or nil."
+  "{:list l :unsectioned [tasks] :sections [{:section g :tasks [...]}]} in display order, or nil."
   [db id]
   (when-let [l (db/q1 db ["SELECT * FROM list WHERE id = ?" id])]
-    (let [groups (map row->group (db/q db ["SELECT * FROM list_group WHERE list_id = ? ORDER BY rank, id" id]))
-          tasks (group-by :task/group
+    (let [sections (map row->section (db/q db ["SELECT * FROM list_section WHERE list_id = ? ORDER BY rank, id" id]))
+          tasks (group-by :task/section
                           (map row->task (db/q db ["SELECT * FROM task WHERE list_id = ? ORDER BY rank, id" id])))]
       {:list (row->list l)
-       :ungrouped (vec (get tasks nil))
-       :groups (mapv (fn [g] {:group g :tasks (vec (get tasks (:list.group/id g)))}) groups)})))
+       :unsectioned (vec (get tasks nil))
+       :sections (mapv (fn [g] {:section g :tasks (vec (get tasks (:list.section/id g)))}) sections)})))
 
 
 (defn list-summary

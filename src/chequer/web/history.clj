@@ -87,7 +87,7 @@
 
 
 (defn plan-history
-  "GET /plans/:id/history: the plan's events, including its groups' and tasks'."
+  "GET /plans/:id/history: the plan's events, including its sections' and tasks'."
   [{:chequer/keys [db] :keys [params] :as req}]
   (let [id (:id params)]
     (if-let [title (entity-title db "plan" id)]
@@ -98,7 +98,7 @@
 
 
 (defn list-history
-  "GET /lists/:id/history: the list's events, including its groups' and tasks'."
+  "GET /lists/:id/history: the list's events, including its sections' and tasks'."
   [{:chequer/keys [db] :keys [params] :as req}]
   (let [id (:id params)]
     (if-let [title (entity-title db "list" id)]

@@ -1,5 +1,5 @@
 (ns chequer.web.plans
-  "Plan pages, the plan SSE stream, and the plan, group and task mutation handlers."
+  "Plan pages, the plan SSE stream, and the plan, section and task mutation handlers."
   (:require
     [chequer.data.plans :as plans]
     [chequer.db :as db]
@@ -49,33 +49,33 @@
 
 
 (defn- new-task-form
-  [plan-id group-id]
-  (let [suffix (str plan-id (when group-id (str "-" group-id)))]
+  [plan-id section-id]
+  (let [suffix (str plan-id (when section-id (str "-" section-id)))]
     [:form.new-task {:data-on:submit (str (action "post" (str "/plans/" plan-id "/tasks")) "; el.reset()")}
-     (when group-id [:input {:type "hidden" :name "group" :value (str group-id)}])
+     (when section-id [:input {:type "hidden" :name "section" :value (str section-id)}])
      (field [:span.visually-hidden "New task"] "title" nil {:required true :placeholder "Add a task"})
      (errors-el (str "new-plan-task-" suffix "-errors"))
      [:button "Add"]]))
 
 
-(defn- render-group-header
-  "#plan-group-<id>-header: the group's title, which collapses it, its controls and an
+(defn- render-section-header
+  "#plan-section-<id>-header: the section's title, which collapses it, its controls and an
   inline edit form."
-  [group task-count]
-  (let [id (:plan.group/id group)
-        path (str "/plan-groups/" id)
-        signal (toggle-signal "Group" id)]
-    [:header (merge {:id (str "plan-group-" id "-header")} (edit-toggle signal))
+  [section task-count]
+  (let [id (:plan.section/id section)
+        path (str "/plan-sections/" id)
+        signal (toggle-signal "Section" id)]
+    [:header (merge {:id (str "plan-section-" id "-header")} (edit-toggle signal))
      [:h2
-      (web/collapse-toggle (str "plan-group-" id) (:plan.group/icon group) (:plan.group/title group) task-count)
+      (web/collapse-toggle (str "plan-section-" id) (:plan.section/icon section) (:plan.section/title section) task-count)
       [:span.controls
        (edit-icon-button signal)
        (move-buttons path)
-       (delete-icon-button (confirmed "Delete this group and its tasks?" (str "@delete('" path "')")))]]
+       (delete-icon-button (confirmed "Delete this section and its tasks?" (str "@delete('" path "')")))]]
      (edit-form signal path
-                (field "Title" "title" (:plan.group/title group) {:required true})
-                (icon-field "Group" id (:plan.group/icon group))
-                (errors-el (str "plan-group-" id "-errors"))
+                (field "Title" "title" (:plan.section/title section) {:required true})
+                (icon-field "Section" id (:plan.section/icon section))
+                (errors-el (str "plan-section-" id "-errors"))
                 [:button "Save"])]))
 
 
@@ -87,17 +87,17 @@
 
 
 (defn- task-list
-  [src plan-id group-id task-ids]
-  [:ul.plan-tasks (web/task-list-attrs group-id) (map #(vector plan-task-view src plan-id %) task-ids)])
+  [src plan-id section-id task-ids]
+  [:ul.plan-tasks (web/task-list-attrs section-id) (map #(vector plan-task-view src plan-id %) task-ids)])
 
 
-(defn- render-group
-  "A group's section, rendered as a component. Its root has no id, so glimmer-datastar keeps the
+(defn- render-section
+  "A section's section, rendered as a component. Its root has no id, so glimmer-datastar keeps the
   parts inside it, the header and each task, patchable on their own."
-  [src plan-id {:keys [group task-ids]}]
-  (let [id (:plan.group/id group)]
-    [:section.plan-group (web/collapsible (str "plan-group-" id))
-     [render-group-header group (count task-ids)]
+  [src plan-id {:keys [section task-ids]}]
+  (let [id (:plan.section/id section)]
+    [:section.plan-section (web/collapsible (str "plan-section-" id))
+     [render-section-header section (count task-ids)]
      (task-list src plan-id id task-ids)
      [new-task-form plan-id id]]))
 
@@ -138,15 +138,15 @@
   renders and sends only that task. A deleted plan sends the viewer to the index."
   [{:chequer/keys [db live] :as src} plan-id]
   @(live/cell live [:plan plan-id :structure])
-  (if-let [{:keys [ungrouped groups]} (plans/load-plan-structure db plan-id)]
+  (if-let [{:keys [unsectioned sections]} (plans/load-plan-structure db plan-id)]
     (list [header-view src plan-id]
-          (task-list src plan-id nil ungrouped)
+          (task-list src plan-id nil unsectioned)
           [new-task-form plan-id nil]
-          (map #(vector render-group src plan-id %) groups)
-          [:form.new-group {:data-on:submit (str (action "post" (str "/plans/" plan-id "/groups")) "; el.reset()")}
-           (field [:span.visually-hidden "New group"] "title" nil {:required true :placeholder "Add a group"})
-           (errors-el (str "new-plan-group-" plan-id "-errors"))
-           [:button "Add group"]])
+          (map #(vector render-section src plan-id %) sections)
+          [:form.new-section {:data-on:submit (str (action "post" (str "/plans/" plan-id "/sections")) "; el.reset()")}
+           (field [:span.visually-hidden "New section"] "title" nil {:required true :placeholder "Add a section"})
+           (errors-el (str "new-plan-section-" plan-id "-errors"))
+           [:button "Add section"]])
     (web/redirect-el "/plans")))
 
 
@@ -233,41 +233,41 @@
   (mutate req nil (fn [tx user _] (plans/delete-plan! tx user {:id (:id params)}))))
 
 
-(defn create-group
-  "POST /plans/:id/groups."
+(defn create-section
+  "POST /plans/:id/sections."
   [{:keys [params] :as req}]
   (let [id (:id params)]
-    (mutate req (str "new-plan-group-" id "-errors")
+    (mutate req (str "new-plan-section-" id "-errors")
             (fn [tx user body]
-              (plans/create-group! tx user (assoc (merge {:title nil} (entity-attrs body [:title :icon])) :plan-id id))))))
+              (plans/create-section! tx user (assoc (merge {:title nil} (entity-attrs body [:title :icon])) :plan-id id))))))
 
 
-(defn update-group
-  "PUT /plan-groups/:id."
+(defn update-section
+  "PUT /plan-sections/:id."
   [{:keys [params] :as req}]
   (let [id (:id params)]
-    (mutate req (str "plan-group-" id "-errors")
+    (mutate req (str "plan-section-" id "-errors")
             (fn [tx user body]
-              (plans/update-group! tx user (assoc (entity-attrs body [:title :icon]) :id id))))))
+              (plans/update-section! tx user (assoc (entity-attrs body [:title :icon]) :id id))))))
 
 
-(defn delete-group
-  "DELETE /plan-groups/:id."
+(defn delete-section
+  "DELETE /plan-sections/:id."
   [{:keys [params] :as req}]
-  (mutate req nil (fn [tx user _] (plans/delete-group! tx user {:id (:id params)}))))
+  (mutate req nil (fn [tx user _] (plans/delete-section! tx user {:id (:id params)}))))
 
 
 (defn create-task
-  "POST /plans/:id/tasks; the optional group field puts the task in that group."
+  "POST /plans/:id/tasks; the optional section field puts the task in that section."
   [{:keys [params] :as req}]
   (let [id (:id params)]
     (mutate req nil
             (fn [tx user body]
-              (let [group (web/parse-id (:group body))]
-                (web/with-errors-id (str "new-plan-task-" id (when group (str "-" group)) "-errors")
+              (let [section (web/parse-id (:section body))]
+                (web/with-errors-id (str "new-plan-task-" id (when section (str "-" section)) "-errors")
                   #(plans/create-plan-task! tx user (assoc (merge {:title nil}
                                                                   (select-keys body [:title :description :icon]))
-                                                           :plan-id id :group-id group))))))))
+                                                           :plan-id id :section-id section))))))))
 
 
 (defn update-task
@@ -285,14 +285,14 @@
   (mutate req nil (fn [tx user _] (plans/delete-plan-task! tx user {:id (:id params)}))))
 
 
-(defn move-group
-  "POST /plan-groups/:id/move?dir=up|down."
+(defn move-section
+  "POST /plan-sections/:id/move?dir=up|down."
   [req]
-  (web/move req plans/move-group!))
+  (web/move req plans/move-section!))
 
 
 (defn move-task
-  "POST /plan-tasks/:id/move?group=<id>&before=<id>."
+  "POST /plan-tasks/:id/move?section=<id>&before=<id>."
   [req]
   (web/place req plans/place-plan-task!))
 
@@ -305,11 +305,11 @@
    [:get ["plans" :id] show]
    [:put ["plans" :id] update-plan]
    [:delete ["plans" :id] delete-plan]
-   [:post ["plans" :id "groups"] create-group]
+   [:post ["plans" :id "sections"] create-section]
    [:post ["plans" :id "tasks"] create-task]
-   [:put ["plan-groups" :id] update-group]
-   [:delete ["plan-groups" :id] delete-group]
-   [:post ["plan-groups" :id "move"] move-group]
+   [:put ["plan-sections" :id] update-section]
+   [:delete ["plan-sections" :id] delete-section]
+   [:post ["plan-sections" :id "move"] move-section]
    [:put ["plan-tasks" :id] update-task]
    [:delete ["plan-tasks" :id] delete-task]
    [:post ["plan-tasks" :id "move"] move-task]])

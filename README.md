@@ -3,7 +3,7 @@
 Chequer is a checklist app that provides a simple way to manage and track lists of tasks that need to be completed.
 
 - **Plans** are reusable patterns of tasks, such as a packing list or a house-cleaning routine, optionally
-  arranged into groups.
+  arranged into sections.
 - **Lists** hold the tasks you actually check off. Start one blank or from one or more plans; plans are merged
   together and duplicate tasks are skipped. A list is a copy, so later edits to a plan never change it.
 - **Tasks** move between pending, completed, and skipped, with due dates and assignees.

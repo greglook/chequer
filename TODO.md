@@ -14,8 +14,8 @@ A list of miscellaneous items I notice that I want to fix later.
 - Serve a prometheus-style metrics endpoint
 
 ## Routes
-- Change `/plan-groups/:id/move?dir=up` to pass the direction in the body
-- Should the `/plan-groups/:id` route be `/plans/:plan/groups/:id` instead?
+- Change `/plan-sections/:id/move?dir=up` to pass the direction in the body
+- Should the `/plan-sections/:id` route be `/plans/:plan/sections/:id` instead?
 
 ## UI
 - "Add Plans" to a list should be a modal view, not a collapsed list on the page

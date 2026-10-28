@@ -113,21 +113,21 @@
     (fn [h sys]
       (let [pid (create-plan! h "Packing")
             u {:id (user-id sys)}
-            {g :result} (db/with-tx [tx (:db sys)] (plans/create-group! tx u {:plan-id pid :title "Clothes"}))]
+            {g :result} (db/with-tx [tx (:db sys)] (plans/create-section! tx u {:plan-id pid :title "Clothes"}))]
         (db/with-tx [tx (:db sys)]
-          (plans/create-plan-task! tx u {:plan-id pid :group-id g :title "Socks"})
+          (plans/create-plan-task! tx u {:plan-id pid :section-id g :title "Socks"})
           (plans/create-plan-task! tx u {:plan-id pid :title "Passport"}))
         (let [{:keys [status body]} (request h :get (str "/plans/" pid))]
           (is (= 200 status))
           (is (str/includes? body "datastar-sse=true"))
           (is (str/includes? body "id=\"live\""))
           (is (str/includes? body (str "id=\"plan-" pid "\"")))
-          (is (str/includes? body (str "id=\"plan-group-" g "-header\"")))
+          (is (str/includes? body (str "id=\"plan-section-" g "-header\"")))
           (is (str/includes? body "Socks"))
-          (is (str/includes? body (str "localStorage.getItem(&#39;chequer:collapsed:plan-group-" g "&#39;)"))
-              "a group starts collapsed or not by what the browser stored")
-          (is (str/includes? body "class=\"group-toggle\"") "the group's title collapses it")
-          (is (< (str/index-of body "Passport") (str/index-of body "Clothes")) "ungrouped tasks come first"))
+          (is (str/includes? body (str "localStorage.getItem(&#39;chequer:collapsed:plan-section-" g "&#39;)"))
+              "a section starts collapsed or not by what the browser stored")
+          (is (str/includes? body "class=\"section-toggle\"") "the section's title collapses it")
+          (is (< (str/index-of body "Passport") (str/index-of body "Clothes")) "unsectioned tasks come first"))
         (is (= 404 (:status (request h :get "/plans/999"))))))))
 
 
@@ -192,7 +192,7 @@
             _ (request h :post (str "/plans/" pid "/tasks") {:title "Charger"})
             [a b] (map :id (db/q (:db sys) ["SELECT id FROM plan_task ORDER BY id"]))
             ch (:body (request h :get (str "/plans/" pid "?datastar-sse=true&datastar-selector=%23live")))
-            part-ids #(set (map second (re-seq #"id=\"(plan-task-\d+|plan-\d+-header|plan-group-\d+-header)\"" %)))]
+            part-ids #(set (map second (re-seq #"id=\"(plan-task-\d+|plan-\d+-header|plan-section-\d+-header)\"" %)))]
         (try
           (is (= #{(str "plan-task-" a) (str "plan-task-" b) (str "plan-" pid "-header")} (part-ids (take-frame ch))))
           (is (= 204 (:status (request h :put (str "/plan-tasks/" b) {:title "USB charger"}))))
@@ -207,47 +207,47 @@
             (async/close! ch)))))))
 
 
-(deftest groups-and-tasks-can-be-edited-moved-and-deleted
+(deftest sections-and-tasks-can-be-edited-moved-and-deleted
   (with-app
     (fn [h sys]
       (let [d (:db sys)
             pid (create-plan! h "P")
             ok? #(= 204 (:status %))]
-        (is (ok? (request h :post (str "/plans/" pid "/groups") {:title "G1"})))
-        (is (ok? (request h :post (str "/plans/" pid "/groups") {:title "G2"})))
-        (let [[g1 g2] (map :id (db/q d ["SELECT id FROM plan_group ORDER BY rank, id"]))]
-          (is (ok? (request h :post (str "/plans/" pid "/tasks") {:title "a" :group (str g1)})))
-          (is (ok? (request h :post (str "/plans/" pid "/tasks") {:title "b" :group (str g1)})))
+        (is (ok? (request h :post (str "/plans/" pid "/sections") {:title "G1"})))
+        (is (ok? (request h :post (str "/plans/" pid "/sections") {:title "G2"})))
+        (let [[g1 g2] (map :id (db/q d ["SELECT id FROM plan_section ORDER BY rank, id"]))]
+          (is (ok? (request h :post (str "/plans/" pid "/tasks") {:title "a" :section (str g1)})))
+          (is (ok? (request h :post (str "/plans/" pid "/tasks") {:title "b" :section (str g1)})))
           (let [[a b] (map :id (db/q d ["SELECT id FROM plan_task ORDER BY rank, id"]))]
-            (is (ok? (request h :post (str "/plan-groups/" g2 "/move?dir=up"))))
-            (is (= [g2 g1] (map :id (db/q d ["SELECT id FROM plan_group ORDER BY rank, id"]))))
-            (is (ok? (request h :post (str "/plan-tasks/" b "/move?group=" g1 "&before=" a))))
+            (is (ok? (request h :post (str "/plan-sections/" g2 "/move?dir=up"))))
+            (is (= [g2 g1] (map :id (db/q d ["SELECT id FROM plan_section ORDER BY rank, id"]))))
+            (is (ok? (request h :post (str "/plan-tasks/" b "/move?section=" g1 "&before=" a))))
             (is (= [b a] (map :id (db/q d ["SELECT id FROM plan_task ORDER BY rank, id"]))))
-            (is (ok? (request h :post (str "/plan-tasks/" b "/move?group=" g2 "&before="))))
-            (is (= {:group_id g2} (db/q1 d ["SELECT group_id FROM plan_task WHERE id = ?" b])))
-            (is (ok? (request h :post (str "/plan-tasks/" b "/move?group="))))
-            (is (= {:group_id nil} (db/q1 d ["SELECT group_id FROM plan_task WHERE id = ?" b])))
-            (is (= 400 (:status (request h :post (str "/plan-tasks/" b "/move?group=" g1 "&before=" b)))))
-            (is (= 400 (:status (request h :post (str "/plan-tasks/" b "/move?group=x")))))
-            (is (= 404 (:status (request h :post (str "/plan-tasks/" b "/move?group=999")))))
-            (is (ok? (request h :put (str "/plan-groups/" g1) {:title "Clothes" :icon ""})))
+            (is (ok? (request h :post (str "/plan-tasks/" b "/move?section=" g2 "&before="))))
+            (is (= {:section_id g2} (db/q1 d ["SELECT section_id FROM plan_task WHERE id = ?" b])))
+            (is (ok? (request h :post (str "/plan-tasks/" b "/move?section="))))
+            (is (= {:section_id nil} (db/q1 d ["SELECT section_id FROM plan_task WHERE id = ?" b])))
+            (is (= 400 (:status (request h :post (str "/plan-tasks/" b "/move?section=" g1 "&before=" b)))))
+            (is (= 400 (:status (request h :post (str "/plan-tasks/" b "/move?section=x")))))
+            (is (= 404 (:status (request h :post (str "/plan-tasks/" b "/move?section=999")))))
+            (is (ok? (request h :put (str "/plan-sections/" g1) {:title "Clothes" :icon ""})))
             (is (ok? (request h :put (str "/plan-tasks/" a) {:title "a2" :description "d" :icon ""})))
             (is (= {:title "a2" :description "d"}
                    (db/q1 d ["SELECT title, description FROM plan_task WHERE id = ?" a])))
             (is (ok? (request h :delete (str "/plan-tasks/" b))))
-            (is (ok? (request h :delete (str "/plan-groups/" g1))))
+            (is (ok? (request h :delete (str "/plan-sections/" g1))))
             (is (empty? (db/q d ["SELECT * FROM plan_task"])))
             (is (= 404 (:status (request h :put (str "/plan-tasks/" a) {:title "x"}))))))))))
 
 
-(deftest a-task-cannot-be-added-to-another-plans-group
+(deftest a-task-cannot-be-added-to-another-plans-section
   (with-app
     (fn [h sys]
       (let [p1 (create-plan! h "P1")
             p2 (create-plan! h "P2")
-            _ (request h :post (str "/plans/" p1 "/groups") {:title "G"})
-            g (:id (db/q1 (:db sys) ["SELECT id FROM plan_group"]))]
-        (is (= 400 (:status (request h :post (str "/plans/" p2 "/tasks") {:title "x" :group (str g)}))))
+            _ (request h :post (str "/plans/" p1 "/sections") {:title "G"})
+            g (:id (db/q1 (:db sys) ["SELECT id FROM plan_section"]))]
+        (is (= 400 (:status (request h :post (str "/plans/" p2 "/tasks") {:title "x" :section (str g)}))))
         (is (empty? (db/q (:db sys) ["SELECT * FROM plan_task"])))))))
 
 

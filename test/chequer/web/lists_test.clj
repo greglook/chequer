@@ -101,10 +101,10 @@
     (fn [h sys]
       (let [lid (create-list! h "Trip")
             u (owner h sys)
-            {g :result} (db/with-tx [tx (:db sys)] (lists/create-group! tx u {:list-id lid :title "Clothes"}))]
+            {g :result} (db/with-tx [tx (:db sys)] (lists/create-section! tx u {:list-id lid :title "Clothes"}))]
         (db/with-tx [tx (:db sys)]
-          (lists/create-task! tx u {:list-id lid :group-id g :title "Socks"})
-          (lists/create-task! tx u {:list-id lid :group-id g :title "Hat"})
+          (lists/create-task! tx u {:list-id lid :section-id g :title "Socks"})
+          (lists/create-task! tx u {:list-id lid :section-id g :title "Hat"})
           (lists/create-task! tx u {:list-id lid :title "Passport"}))
         (let [{:keys [status body]} (request h :get (str "/lists/" lid))]
           (is (= 200 status))
@@ -112,10 +112,10 @@
           (is (str/includes? body "id=\"live\""))
           (is (str/includes? body (str "id=\"list-" lid "\"")))
           (is (str/includes? body (str "id=\"list-" lid "-header\"")))
-          (is (str/includes? body (str "id=\"list-group-" g "-header\"")))
-          (is (str/includes? body "data-task-count=\"2\"") "deleting the group confirms with its task count")
+          (is (str/includes? body (str "id=\"list-section-" g "-header\"")))
+          (is (str/includes? body "data-task-count=\"2\"") "deleting the section confirms with its task count")
           (is (str/includes? body "0 of 3 done"))
-          (is (< (str/index-of body "Passport") (str/index-of body "Clothes")) "ungrouped tasks come first"))
+          (is (< (str/index-of body "Passport") (str/index-of body "Clothes")) "unsectioned tasks come first"))
         (is (= 404 (:status (request h :get "/lists/999"))))))))
 
 
@@ -158,7 +158,7 @@
 (defn- part-ids
   "The ids of the parts a patch frame replaces."
   [frame]
-  (set (map second (re-seq #"id=\"(task-\d+|list-\d+-header|list-group-\d+-header)\"" frame))))
+  (set (map second (re-seq #"id=\"(task-\d+|list-\d+-header|list-section-\d+-header)\"" frame))))
 
 
 (deftest a-state-change-sends-exactly-the-task-and-the-header
@@ -166,15 +166,15 @@
     (fn [h sys]
       (let [lid (create-list! h "Trip")
             _ (request h :post (str "/lists/" lid "/tasks") {:signals {:title "Passport"}})
-            _ (request h :post (str "/lists/" lid "/groups") {:signals {:title "Clothes"}})
-            gid (:id (db/q1 (:db sys) ["SELECT id FROM list_group"]))
-            _ (request h :post (str "/lists/" lid "/tasks") {:signals {:title "Socks" :group (str gid)}})
-            _ (request h :post (str "/lists/" lid "/tasks") {:signals {:title "Shirts" :group (str gid)}})
+            _ (request h :post (str "/lists/" lid "/sections") {:signals {:title "Clothes"}})
+            gid (:id (db/q1 (:db sys) ["SELECT id FROM list_section"]))
+            _ (request h :post (str "/lists/" lid "/tasks") {:signals {:title "Socks" :section (str gid)}})
+            _ (request h :post (str "/lists/" lid "/tasks") {:signals {:title "Shirts" :section (str gid)}})
             [_ socks shirts] (task-ids sys)
             streams (repeatedly 2 #(:body (request h :get (str "/lists/" lid "?datastar-sse=true&datastar-selector=%23live"))))]
         (try
           (doseq [ch streams]
-            (is (set/subset? #{(str "task-" socks) (str "task-" shirts) (str "list-" lid "-header") (str "list-group-" gid "-header")}
+            (is (set/subset? #{(str "task-" socks) (str "task-" shirts) (str "list-" lid "-header") (str "list-section-" gid "-header")}
                              (part-ids (take-frame ch)))
                 "the first frame is the whole list"))
           (is (ok? (request h :post (str "/tasks/" socks "/state?to=completed"))))
@@ -325,47 +325,47 @@
             (async/close! ch)))))))
 
 
-(deftest groups-can-be-edited-moved-and-deleted
+(deftest sections-can-be-edited-moved-and-deleted
   (with-app
     (fn [h sys]
       (let [d (:db sys)
             lid (create-list! h "L")]
-        (is (ok? (request h :post (str "/lists/" lid "/groups") {:signals {:title "G1"}})))
-        (is (ok? (request h :post (str "/lists/" lid "/groups") {:signals {:title "G2"}})))
-        (let [[g1 g2] (map :id (db/q d ["SELECT id FROM list_group ORDER BY rank, id"]))]
-          (is (ok? (request h :post (str "/lists/" lid "/tasks") {:signals {:title "a" :group (str g1)}})))
-          (is (= g1 (:group_id (db/q1 d ["SELECT group_id FROM task"]))))
-          (is (ok? (request h :post (str "/list-groups/" g2 "/move?dir=up"))))
-          (is (= [g2 g1] (map :id (db/q d ["SELECT id FROM list_group ORDER BY rank, id"]))))
-          (is (ok? (request h :put (str "/list-groups/" g1) {:signals {:title "Clothes" :icon ""}})))
-          (is (= "Clothes" (:title (db/q1 d ["SELECT title FROM list_group WHERE id = ?" g1]))))
-          (let [r (request h :post (str "/lists/" lid "/tasks") {:signals {:title " " :group (str g1)}})]
+        (is (ok? (request h :post (str "/lists/" lid "/sections") {:signals {:title "G1"}})))
+        (is (ok? (request h :post (str "/lists/" lid "/sections") {:signals {:title "G2"}})))
+        (let [[g1 g2] (map :id (db/q d ["SELECT id FROM list_section ORDER BY rank, id"]))]
+          (is (ok? (request h :post (str "/lists/" lid "/tasks") {:signals {:title "a" :section (str g1)}})))
+          (is (= g1 (:section_id (db/q1 d ["SELECT section_id FROM task"]))))
+          (is (ok? (request h :post (str "/list-sections/" g2 "/move?dir=up"))))
+          (is (= [g2 g1] (map :id (db/q d ["SELECT id FROM list_section ORDER BY rank, id"]))))
+          (is (ok? (request h :put (str "/list-sections/" g1) {:signals {:title "Clothes" :icon ""}})))
+          (is (= "Clothes" (:title (db/q1 d ["SELECT title FROM list_section WHERE id = ?" g1]))))
+          (let [r (request h :post (str "/lists/" lid "/tasks") {:signals {:title " " :section (str g1)}})]
             (is (str/includes? (:body r) (str "id=\"new-task-" lid "-" g1 "-errors\""))))
-          (is (ok? (request h :delete (str "/list-groups/" g1))))
+          (is (ok? (request h :delete (str "/list-sections/" g1))))
           (is (empty? (db/q d ["SELECT * FROM task"])))
           (let [other (create-list! h "Other")]
-            (is (= 400 (:status (request h :post (str "/lists/" other "/tasks") {:signals {:title "x" :group (str g2)}}))))))))))
+            (is (= 400 (:status (request h :post (str "/lists/" other "/tasks") {:signals {:title "x" :section (str g2)}}))))))))))
 
 
 (defn- make-plan!
-  "A plan titled title with groups {group-title [task-title...]} (nil for ungrouped). Returns its id."
-  [{:keys [db]} u title groups]
+  "A plan titled title with sections {section-title [task-title...]} (nil for unsectioned). Returns its id."
+  [{:keys [db]} u title sections]
   (:result
     (db/with-tx [tx db]
       (let [pid (plans/create-plan! tx u {:title title})]
-        (doseq [[gt tasks] groups
-                :let [gid (when gt (plans/create-group! tx u {:plan-id pid :title gt}))]
+        (doseq [[gt tasks] sections
+                :let [gid (when gt (plans/create-section! tx u {:plan-id pid :title gt}))]
                 t tasks]
-          (plans/create-plan-task! tx u {:plan-id pid :group-id gid :title t}))
+          (plans/create-plan-task! tx u {:plan-id pid :section-id gid :title t}))
         pid))))
 
 
 (defn- shape
-  "The list's display order as [ungrouped-titles [group-title task-titles]...]."
+  "The list's display order as [unsectioned-titles [section-title task-titles]...]."
   [{:keys [db]} lid]
-  (let [{:keys [ungrouped groups]} (lists/load-list db lid)]
-    [(mapv :task/title ungrouped)
-     (mapv (fn [{:keys [group tasks]}] [(:list.group/title group) (mapv :task/title tasks)]) groups)]))
+  (let [{:keys [unsectioned sections]} (lists/load-list db lid)]
+    [(mapv :task/title unsectioned)
+     (mapv (fn [{:keys [section tasks]}] [(:list.section/title section) (mapv :task/title tasks)]) sections)]))
 
 
 (def ^:private plan-ids-key
@@ -390,7 +390,7 @@
                 lid (parse-long (second (re-find #"^/lists/(\d+)$" (get-in r [:headers "Location"]))))]
             (is (= 303 (:status r)))
             (is (= [["Passport"] [["Clothes" ["Socks" "Hat" "Swimsuit"]] ["Fun" ["Kite"]]]] (shape sys lid))
-                "groups merge by title, and the duplicate socks is skipped")
+                "sections merge by title, and the duplicate socks is skipped")
             (is (= ["add-plan" "add-plan"]
                    (map :action (db/q (:db sys) ["SELECT action FROM event WHERE list_id = ? AND action = 'add-plan'" lid]))))))
         (testing "one plan arrives as a single field"
@@ -452,7 +452,7 @@
                            (str "href=\"/lists/new?plan=" pid "\"")))))))
 
 
-(deftest a-group-added-while-a-render-runs-still-reaches-the-stream
+(deftest a-section-added-while-a-render-runs-still-reaches-the-stream
   (with-app
     (fn [h _sys]
       (let [lid (create-list! h "Trip")
@@ -471,12 +471,12 @@
                               (deliver inside true)
                               @release)
                             structure))]
-            (request h :post (str "/lists/" lid "/groups") {:signals {:title "First"}})
-            (is (deref inside 3000 nil) "the render is held after reading the first group")
-            (request h :post (str "/lists/" lid "/groups") {:signals {:title "Second"}})
+            (request h :post (str "/lists/" lid "/sections") {:signals {:title "First"}})
+            (is (deref inside 3000 nil) "the render is held after reading the first section")
+            (request h :post (str "/lists/" lid "/sections") {:signals {:title "Second"}})
             (deliver release true)
             (let [frames (str (take-frame ch) (take-frame ch))]
               (is (str/includes? frames "First"))
-              (is (str/includes? frames "Second") "the render that missed the group isn't cached")))
+              (is (str/includes? frames "Second") "the render that missed the section isn't cached")))
           (finally
             (async/close! ch)))))))

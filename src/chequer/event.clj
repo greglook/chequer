@@ -37,10 +37,10 @@
 (def ^:private entity-tables
   "The table holding each entity type's rows."
   {"plan" "plan"
-   "plan.group" "plan_group"
+   "plan.section" "plan_section"
    "plan.task" "plan_task"
    "list" "list"
-   "list.group" "list_group"
+   "list.section" "list_section"
    "task" "task"})
 
 
@@ -88,14 +88,14 @@
 
 
 (defn plan-history
-  "The events of plan plan-id and its groups and tasks, newest first. opts are {:before id
+  "The events of plan plan-id and its sections and tasks, newest first. opts are {:before id
   :limit n}, paging by event id."
   [db plan-id opts]
   (history db ["e.plan_id = ?" plan-id] opts))
 
 
 (defn list-history
-  "The events of list list-id and its groups and tasks, newest first. opts are as for
+  "The events of list list-id and its sections and tasks, newest first. opts are as for
   plan-history."
   [db list-id opts]
   (history db ["e.list_id = ?" list-id] opts))
@@ -112,10 +112,10 @@
 
 (def ^:private kind-names
   {"plan" "plan"
-   "plan.group" "group"
+   "plan.section" "section"
    "plan.task" "task"
    "list" "list"
-   "list.group" "group"
+   "list.section" "section"
    "task" "task"})
 
 
@@ -173,7 +173,7 @@
 
 
 (defn describe-event
-  "A sentence describing event e, e.g. \"greg completed Pack charger\" or \"greg renamed group
+  "A sentence describing event e, e.g. \"greg completed Pack charger\" or \"greg renamed section
   Kitchen → Cooking\". Deleted entities are named by the title stored in their events. Falls
   back to the event's message when no case matches."
   [{:event/keys [user-title entity-type entity-title action data message]}]

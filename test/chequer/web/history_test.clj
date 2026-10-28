@@ -63,7 +63,7 @@
   (is (= "greg reset Pack charger to pending" (describe :update "task" {:state ["completed" "pending"]})))
   (is (= "greg created task Pack charger" (describe :create "plan.task" {:title "Pack charger"})))
   (is (= "greg deleted task Pack charger" (describe :delete "task" {:title "Pack charger"})))
-  (is (= "greg renamed group Kitchen → Cooking" (describe :update "list.group" {:title ["Kitchen" "Cooking"]})))
+  (is (= "greg renamed section Kitchen → Cooking" (describe :update "list.section" {:title ["Kitchen" "Cooking"]})))
   (is (= "greg changed the description, icon of task Pack charger"
          (describe :update "plan.task" {:icon [nil "x"] :description [nil "x"]})))
   (is (= "greg changed the due date of task Pack charger and renamed it to Pack cable"
@@ -154,15 +154,15 @@
       (let [pid (binding [time/*now-ms* (constantly 0)]
                   (tx d (plans/create-plan! tx u {:title "Packing"})))
             other (tx d (plans/create-plan! tx u {:title "Cleaning"}))]
-        (tx d (plans/create-group! tx u {:plan-id pid :title "Kitchen"}))
+        (tx d (plans/create-section! tx u {:plan-id pid :title "Kitchen"}))
         (tx d (plans/create-plan-task! tx u {:plan-id other :title "Vacuum"}))
-        (let [g (:id (db/q1 d ["SELECT id FROM plan_group"]))]
-          (tx d (plans/update-group! tx u {:id g :title "Cooking"})))
+        (let [g (:id (db/q1 d ["SELECT id FROM plan_section"]))]
+          (tx d (plans/update-section! tx u {:id g :title "Cooking"})))
         (let [{:keys [status body]} (request h (str "/plans/" pid "/history")
                                              {"cookie" "tz=America/New_York"})]
           (is (= 200 status))
           (is (str/includes? body "Packing history"))
-          (is (str/includes? body "Greg renamed group Kitchen → Cooking"))
+          (is (str/includes? body "Greg renamed section Kitchen → Cooking"))
           (is (str/includes? body "Greg created plan Packing"))
           (is (str/includes? body "Wed 31 Dec 1969, 19:00"))
           (is (not (str/includes? body "Vacuum")))

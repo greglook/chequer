@@ -1,5 +1,5 @@
 (ns chequer.web.lists
-  "List pages, their SSE streams, and the list, group and task mutation handlers."
+  "List pages, their SSE streams, and the list, section and task mutation handlers."
   (:require
     [chequer.data.add-plan :as add-plan]
     [chequer.data.lists :as lists]
@@ -135,35 +135,35 @@
 
 
 (defn- new-task-form
-  [list-id group-id]
-  (let [suffix (str list-id (when group-id (str "-" group-id)))]
+  [list-id section-id]
+  (let [suffix (str list-id (when section-id (str "-" section-id)))]
     [:form.new-task {:data-on:submit (str (action "post" (str "/lists/" list-id "/tasks")) "; el.reset()")}
-     (when group-id [:input {:type "hidden" :name "group" :value (str group-id)}])
+     (when section-id [:input {:type "hidden" :name "section" :value (str section-id)}])
      (field [:span.visually-hidden "New task"] "title" nil {:required true :placeholder "Add a task"})
      (errors-el (str "new-task-" suffix "-errors"))
      [:button "Add"]]))
 
 
-(defn- render-group-header
-  "#list-group-<id>-header: the group's title and controls. Deleting confirms with the
+(defn- render-section-header
+  "#list-section-<id>-header: the section's title and controls. Deleting confirms with the
   number of tasks, from data-task-count, that go with it."
-  [group task-count]
-  (let [id (:list.group/id group)
-        path (str "/list-groups/" id)
-        signal (toggle-signal "Group" id)]
-    [:header (merge {:id (str "list-group-" id "-header")} (edit-toggle signal))
+  [section task-count]
+  (let [id (:list.section/id section)
+        path (str "/list-sections/" id)
+        signal (toggle-signal "Section" id)]
+    [:header (merge {:id (str "list-section-" id "-header")} (edit-toggle signal))
      [:h2
-      (web/collapse-toggle (str "list-group-" id) (:list.group/icon group) (:list.group/title group) task-count)
+      (web/collapse-toggle (str "list-section-" id) (:list.section/icon section) (:list.section/title section) task-count)
       [:span.controls
        (edit-icon-button signal)
        (move-buttons path)
-       (delete-icon-button (str "confirm('Delete this group and its ' + el.dataset.taskCount + ' task(s)?') && "
+       (delete-icon-button (str "confirm('Delete this section and its ' + el.dataset.taskCount + ' task(s)?') && "
                                 "@delete('" path "')")
                            {:data-task-count (str task-count)})]]
      (edit-form signal path
-                (field "Title" "title" (:list.group/title group) {:required true})
-                (icon-field "Group" id (:list.group/icon group))
-                (errors-el (str "list-group-" id "-errors"))
+                (field "Title" "title" (:list.section/title section) {:required true})
+                (icon-field "Section" id (:list.section/icon section))
+                (errors-el (str "list-section-" id "-errors"))
                 [:button "Save"])]))
 
 
@@ -184,17 +184,17 @@
 
 
 (defn- task-list
-  [src list-id group-id task-ids v]
-  [:ul.tasks (web/task-list-attrs group-id) (map #(vector task-view src list-id % v) task-ids)])
+  [src list-id section-id task-ids v]
+  [:ul.tasks (web/task-list-attrs section-id) (map #(vector task-view src list-id % v) task-ids)])
 
 
-(defn- render-group
-  "A group's section, rendered as a component. Its root has no id, so glimmer-datastar keeps the
+(defn- render-section
+  "A section's section, rendered as a component. Its root has no id, so glimmer-datastar keeps the
   parts inside it, the header and each task, patchable on their own."
-  [src list-id {:keys [group task-ids]} v]
-  (let [id (:list.group/id group)]
-    [:section.list-group (web/collapsible (str "list-group-" id))
-     [render-group-header group (count task-ids)]
+  [src list-id {:keys [section task-ids]} v]
+  (let [id (:list.section/id section)]
+    [:section.list-section (web/collapsible (str "list-section-" id))
+     [render-section-header section (count task-ids)]
      (task-list src list-id id task-ids v)
      [new-task-form list-id id]]))
 
@@ -255,15 +255,15 @@
   viewer to the index."
   [{:chequer/keys [db live] :as src} list-id v]
   @(live/cell live [:list list-id :structure])
-  (if-let [{:keys [ungrouped groups]} (lists/load-list-structure db list-id)]
+  (if-let [{:keys [unsectioned sections]} (lists/load-list-structure db list-id)]
     (list [header-view src list-id v]
-          (task-list src list-id nil ungrouped v)
+          (task-list src list-id nil unsectioned v)
           [new-task-form list-id nil]
-          (map #(vector render-group src list-id % v) groups)
-          [:form.new-group {:data-on:submit (str (action "post" (str "/lists/" list-id "/groups")) "; el.reset()")}
-           (field [:span.visually-hidden "New group"] "title" nil {:required true :placeholder "Add a group"})
-           (errors-el (str "new-list-group-" list-id "-errors"))
-           [:button "Add group"]])
+          (map #(vector render-section src list-id % v) sections)
+          [:form.new-section {:data-on:submit (str (action "post" (str "/lists/" list-id "/sections")) "; el.reset()")}
+           (field [:span.visually-hidden "New section"] "title" nil {:required true :placeholder "Add a section"})
+           (errors-el (str "new-list-section-" list-id "-errors"))
+           [:button "Add section"]])
     (web/redirect-el "/")))
 
 
@@ -512,46 +512,46 @@
   (mutate req nil (fn [tx user _] (lists/unarchive-list! tx user {:id (by-id req)}))))
 
 
-(defn create-group
-  "POST /lists/:id/groups."
+(defn create-section
+  "POST /lists/:id/sections."
   [req]
   (let [id (by-id req)]
-    (mutate req (str "new-list-group-" id "-errors")
+    (mutate req (str "new-list-section-" id "-errors")
             (fn [tx user body]
-              (lists/create-group! tx user (assoc (merge {:title nil} (select-keys body [:title :icon])) :list-id id))))))
+              (lists/create-section! tx user (assoc (merge {:title nil} (select-keys body [:title :icon])) :list-id id))))))
 
 
-(defn update-group
-  "PUT /list-groups/:id."
+(defn update-section
+  "PUT /list-sections/:id."
   [req]
   (let [id (by-id req)]
-    (mutate req (str "list-group-" id "-errors")
+    (mutate req (str "list-section-" id "-errors")
             (fn [tx user body]
-              (lists/update-group! tx user (assoc (select-keys body [:title :icon]) :id id))))))
+              (lists/update-section! tx user (assoc (select-keys body [:title :icon]) :id id))))))
 
 
-(defn delete-group
-  "DELETE /list-groups/:id."
+(defn delete-section
+  "DELETE /list-sections/:id."
   [req]
-  (mutate req nil (fn [tx user _] (lists/delete-group! tx user {:id (by-id req)}))))
+  (mutate req nil (fn [tx user _] (lists/delete-section! tx user {:id (by-id req)}))))
 
 
-(defn move-group
-  "POST /list-groups/:id/move?dir=up|down."
+(defn move-section
+  "POST /list-sections/:id/move?dir=up|down."
   [req]
-  (web/move req lists/move-group!))
+  (web/move req lists/move-section!))
 
 
 (defn create-task
-  "POST /lists/:id/tasks; the optional group field puts the task in that group."
+  "POST /lists/:id/tasks; the optional section field puts the task in that section."
   [req]
   (let [id (by-id req)]
     (mutate req nil
             (fn [tx user body]
-              (let [group (web/parse-id (:group body))]
-                (web/with-errors-id (str "new-task-" id (when group (str "-" group)) "-errors")
+              (let [section (web/parse-id (:section body))]
+                (web/with-errors-id (str "new-task-" id (when section (str "-" section)) "-errors")
                   #(lists/create-task! tx user (assoc (merge {:title nil} (task-attrs tx body req))
-                                                      :list-id id :group-id group))))))))
+                                                      :list-id id :section-id section))))))))
 
 
 (defn update-task
@@ -570,7 +570,7 @@
 
 
 (defn move-task
-  "POST /tasks/:id/move?group=<id>&before=<id>."
+  "POST /tasks/:id/move?section=<id>&before=<id>."
   [req]
   (web/place req lists/place-task!))
 
@@ -618,11 +618,11 @@
    [:post ["lists" :id "archive"] archive-list]
    [:post ["lists" :id "unarchive"] unarchive-list]
    [:post ["lists" :id "add-plans"] add-plans]
-   [:post ["lists" :id "groups"] create-group]
+   [:post ["lists" :id "sections"] create-section]
    [:post ["lists" :id "tasks"] create-task]
-   [:put ["list-groups" :id] update-group]
-   [:delete ["list-groups" :id] delete-group]
-   [:post ["list-groups" :id "move"] move-group]
+   [:put ["list-sections" :id] update-section]
+   [:delete ["list-sections" :id] delete-section]
+   [:post ["list-sections" :id "move"] move-section]
    [:put ["tasks" :id] update-task]
    [:delete ["tasks" :id] delete-task]
    [:post ["tasks" :id "move"] move-task]

@@ -1,19 +1,19 @@
 // Drag tasks by their grip to reorder them, within a list of tasks or into another one.
 //
-// Lists of tasks are [data-task-list] elements whose data-group is the group they hold
-// ('' for none), and tasks are their [data-task-id] children. While a task is dragged it
-// moves through the page's DOM, so the others make room for it; on release the task gets a
-// task-drop event whose detail is {group, before}: the group it's now in and the id of the
-// task it now precedes ('' when last). The task's data-on:task-drop posts that to the
-// server, whose re-render then agrees with the moved DOM. A focused grip moves its task
+// Lists of tasks are [data-task-list] elements whose data-section is the section they
+// hold ('' for none), and tasks are their [data-task-id] children. While a task is dragged
+// it moves through the page's DOM, so the others make room for it; on release the task
+// gets a task-drop event whose detail is {section, before}: the section it's now in and the
+// id of the task it now precedes ('' when last). The task's data-on:task-drop posts that to
+// the server, whose re-render then agrees with the moved DOM. A focused grip moves its task
 // with the arrow keys the same way.
 //
 // While dragging, the new-task form just after each list stands in as a place to drop a task
-// at the end of that list, and so does the header of a collapsed group, whose list and form
-// are hidden. Empty and collapsed lists take a task only these ways, and only on release:
-// until then the task stays where it was, so the list doesn't appear and shift the page,
-// and a collapsed group stays collapsed. Likewise, when the dragged task leaves a list it
-// was the only task of, a spacer of its height keeps that list open until release.
+// at the end of that list, and so does the header of a collapsed section, whose list and
+// form are hidden. Empty and collapsed lists take a task only these ways, and only on
+// release: until then the task stays where it was, so the list doesn't appear and shift the
+// page, and a collapsed section stays collapsed. Likewise, when the dragged task leaves a
+// list it was the only task of, a spacer of its height keeps that list open until release.
 (function () {
   var drag = null;
   var droppedAt = 0;
@@ -22,7 +22,7 @@
     return Array.prototype.slice.call(document.querySelectorAll('[data-task-list]'));
   }
 
-  // The lists the arrow keys move a task into: all but those of collapsed groups. Empty
+  // The lists the arrow keys move a task into: all but those of collapsed sections. Empty
   // lists are hidden, so they're found by this, not by layout.
   function openLists() {
     return allLists().filter(function (l) { return !l.closest('.collapsed'); });
@@ -44,7 +44,7 @@
     var p = position(item);
     if (p.list === origin.list && p.next === origin.next) return;
     item.dispatchEvent(new CustomEvent('task-drop', {
-      detail: {group: p.list.dataset.group || '', before: p.next ? p.next.dataset.taskId : ''}
+      detail: {section: p.list.dataset.section || '', before: p.next ? p.next.dataset.taskId : ''}
     }));
   }
 
@@ -52,7 +52,7 @@
     return el.getClientRects().length > 0;
   }
 
-  // The list, new-task form or collapsed group's header nearest the pointer, counting one
+  // The list, new-task form or collapsed section's header nearest the pointer, counting one
   // it's over as nearest, as {list, zone, pending}: zone is the form or header when that's
   // nearest, and pending is true when the task should go there only on release. A list
   // counts only while it has tasks besides the dragged one, or has the dragged one, so
@@ -66,9 +66,9 @@
       if (d < bestDistance) { best = target; bestDistance = d; }
     }
     allLists().forEach(function (l) {
-      var group = l.closest('.collapsed');
-      if (group) {
-        var header = group.querySelector(':scope > header');
+      var section = l.closest('.collapsed');
+      if (section) {
+        var header = section.querySelector(':scope > header');
         if (header) consider(header, {list: l, zone: header, pending: true});
         return;
       }
