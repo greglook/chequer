@@ -103,9 +103,9 @@
         (is (str/includes? (:body r) "can&#39;t be blank")))
       (is (nil? (db/q1 (:db sys) ["SELECT * FROM plan"])))
       (let [pid (create-plan! h "P")
-            r (request h :post (str "/plans/" pid "/tasks") {:title "x" :estimate "soon"})]
+            r (request h :post (str "/plans/" pid "/tasks") {:title "x" :icon "soon"})]
         (is (str/includes? (:body r) (str "id=\"new-plan-task-" pid "-errors\"")))
-        (is (str/includes? (:body r) "must be a whole number of minutes"))))))
+        (is (str/includes? (:body r) "must be a single emoji"))))))
 
 
 (deftest plan-page-shows-plan-and-subscribes-to-its-stream
@@ -115,7 +115,7 @@
             u {:id (user-id sys)}
             {g :result} (db/with-tx [tx (:db sys)] (plans/create-group! tx u {:plan-id pid :title "Clothes"}))]
         (db/with-tx [tx (:db sys)]
-          (plans/create-plan-task! tx u {:plan-id pid :group-id g :title "Socks" :estimate 5})
+          (plans/create-plan-task! tx u {:plan-id pid :group-id g :title "Socks"})
           (plans/create-plan-task! tx u {:plan-id pid :title "Passport"}))
         (let [{:keys [status body]} (request h :get (str "/plans/" pid))]
           (is (= 200 status))
@@ -231,9 +231,9 @@
             (is (= 400 (:status (request h :post (str "/plan-tasks/" b "/move?group=x")))))
             (is (= 404 (:status (request h :post (str "/plan-tasks/" b "/move?group=999")))))
             (is (ok? (request h :put (str "/plan-groups/" g1) {:title "Clothes" :icon ""})))
-            (is (ok? (request h :put (str "/plan-tasks/" a) {:title "a2" :description "d" :icon "" :estimate "3"})))
-            (is (= {:title "a2" :description "d" :estimate 3}
-                   (db/q1 d ["SELECT title, description, estimate FROM plan_task WHERE id = ?" a])))
+            (is (ok? (request h :put (str "/plan-tasks/" a) {:title "a2" :description "d" :icon ""})))
+            (is (= {:title "a2" :description "d"}
+                   (db/q1 d ["SELECT title, description FROM plan_task WHERE id = ?" a])))
             (is (ok? (request h :delete (str "/plan-tasks/" b))))
             (is (ok? (request h :delete (str "/plan-groups/" g1))))
             (is (empty? (db/q d ["SELECT * FROM plan_task"])))

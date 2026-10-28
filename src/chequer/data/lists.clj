@@ -29,7 +29,7 @@
 
 
 (def ^:private task-schemas
-  {:title plans/Title :description plans/Description :icon plans/Icon :estimate plans/Estimate
+  {:title plans/Title :description plans/Description :icon plans/Icon
    :due_at Instant :assignee_id UserRef})
 
 
@@ -73,7 +73,6 @@
    :task/title (:title r)
    :task/description (:description r)
    :task/icon (:icon r)
-   :task/estimate (:estimate r)
    :task/due-at (:due_at r)
    :task/assignee (:assignee_id r)
    :task/state (keyword (:state r))
@@ -266,7 +265,7 @@
 
 
 (defn update-task!
-  "Update the given keys of {:id :title :description :icon :estimate :due_at :assignee_id}."
+  "Update the given keys of {:id :title :description :icon :due_at :assignee_id}."
   [tx user attrs]
   (update-entity! tx user {:table "task" :schemas task-schemas :entity-type "task"
                            :list-id-of :list_id :part-of :id :stamped? true

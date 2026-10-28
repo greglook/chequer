@@ -20,7 +20,6 @@
   [t]
   (list (field "Title" "title" (:plan.task/title t) {:required true})
         (icon-field "Task" (:plan.task/id t) (:plan.task/icon t))
-        (field "Estimate (minutes)" "estimate" (some-> (:plan.task/estimate t) str) {:inputmode "numeric" :size 6})
         [:label "Description" [:textarea {:name "description" :rows 3} (or (:plan.task/description t) "")]]))
 
 
@@ -39,13 +38,10 @@
       web/drag-grip
       [:span.icon (:plan.task/icon t)]
       (web/expand-title el-id (:plan.task/title t) description)
-      (when-let [e (:plan.task/estimate t)] [:span.estimate (str e " min")])
       [:span.controls
        (edit-icon-button signal)
        (more-menu (delete-menu-item "Delete this task?" path))]]
-     (web/expanded-card el-id signal
-                        [["Estimate" (some-> (:plan.task/estimate t) (str " min"))]]
-                        (some-> description md/render))
+     (web/expanded-card el-id signal [] (some-> description md/render))
      (edit-form signal path
                 (task-form t)
                 (errors-el errors)
@@ -270,7 +266,7 @@
               (let [group (web/parse-id (:group body))]
                 (web/with-errors-id (str "new-plan-task-" id (when group (str "-" group)) "-errors")
                   #(plans/create-plan-task! tx user (assoc (merge {:title nil}
-                                                                  (select-keys body [:title :description :icon :estimate]))
+                                                                  (select-keys body [:title :description :icon]))
                                                            :plan-id id :group-id group))))))))
 
 
@@ -280,7 +276,7 @@
   (let [id (:id params)]
     (mutate req (str "plan-task-" id "-errors")
             (fn [tx user body]
-              (plans/update-plan-task! tx user (assoc (entity-attrs body [:title :description :icon :estimate]) :id id))))))
+              (plans/update-plan-task! tx user (assoc (entity-attrs body [:title :description :icon]) :id id))))))
 
 
 (defn delete-task

@@ -790,7 +790,6 @@ ul.errors:empty {
   color: var(--info);
 }
 
-.estimate,
 .due,
 .summary {
   color: var(--muted);

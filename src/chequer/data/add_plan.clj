@@ -67,7 +67,7 @@
                       [titles created (inc skipped)]
                       (do (lists/create-task! tx user {:list-id list-id :group-id group-id :source-id (:id t)
                                                        :title (:title t) :description (:description t)
-                                                       :icon (:icon t) :estimate (:estimate t)})
+                                                       :icon (:icon t)})
                           [(update titles group-id (fnil conj #{}) title) (inc created) skipped]))))
                 [(list-task-titles tx list-id) 0 0]
                 (plan-tasks tx plan-id groups))

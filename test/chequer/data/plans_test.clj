@@ -45,14 +45,7 @@
   (is (contains? (plans/validate-icon "🧳1") :error))
   (is (= {:value "7️⃣"} (plans/validate-icon "7️⃣")) "a digit is allowed in a keycap")
   (is (contains? (plans/validate-icon "7") :error))
-  (is (contains? (plans/validate-icon "🧳🧳🧳🧳🧳🧳🧳🧳🧳") :error) "9 code points is too many")
-  (is (= {:value nil} (plans/validate-estimate "")))
-  (is (= {:value 0} (plans/validate-estimate "0")))
-  (is (= {:value 15} (plans/validate-estimate " 15 ")))
-  (is (= {:value 15} (plans/validate-estimate 15)))
-  (is (contains? (plans/validate-estimate "-1") :error))
-  (is (contains? (plans/validate-estimate "1.5") :error))
-  (is (contains? (plans/validate-estimate "soon") :error)))
+  (is (contains? (plans/validate-icon "🧳🧳🧳🧳🧳🧳🧳🧳🧳") :error) "9 code points is too many"))
 
 
 (deftest create-update-delete-plan-write-events
@@ -96,7 +89,7 @@
              (let [pid (plans/create-plan! tx u {:title "P"})
                    g1 (plans/create-group! tx u {:plan-id pid :title "G1"})
                    g2 (plans/create-group! tx u {:plan-id pid :title "G2" :icon "🧺"})
-                   a (plans/create-plan-task! tx u {:plan-id pid :group-id g1 :title "a" :estimate "5"})
+                   a (plans/create-plan-task! tx u {:plan-id pid :group-id g1 :title "a" :icon "🧦"})
                    b (plans/create-plan-task! tx u {:plan-id pid :group-id g1 :title "b"})
                    c (plans/create-plan-task! tx u {:plan-id pid :title "c" :description "desc"})
                    dd (plans/create-plan-task! tx u {:plan-id pid :group-id g2 :title "d"})]
@@ -116,9 +109,9 @@
       (let [{:keys [pid a]} (seed d u)
             loaded (plans/load-plan d pid)]
         (is (= [["c"] [["G1" ["a" "b"]] ["G2" ["d"]]]] (shape loaded)))
-        (is (= {:plan.task/id a :plan.task/plan pid :plan.task/estimate 5}
+        (is (= {:plan.task/id a :plan.task/plan pid :plan.task/icon "🧦"}
                (select-keys (first (:tasks (first (:groups loaded))))
-                            [:plan.task/id :plan.task/plan :plan.task/estimate])))))))
+                            [:plan.task/id :plan.task/plan :plan.task/icon])))))))
 
 
 (deftest moving-groups-and-tasks-changes-display-order
@@ -144,11 +137,11 @@
       (let [{:keys [pid g1 a]} (seed d u)
             before (count (events d))]
         (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/update-group! % u {:id g1 :title "Clothes" :icon "👕"})))))
-        (tx! d #(plans/update-plan-task! % u {:id a :title "a2" :estimate "" :description "x"}))
+        (tx! d #(plans/update-plan-task! % u {:id a :title "a2" :icon "" :description "x"}))
         (is (= [{:entity_type "plan.group" :entity_id g1 :plan_id pid :action "update"
                  :data {:title ["G1" "Clothes"] :icon [nil "👕"]}}
                 {:entity_type "plan.task" :entity_id a :plan_id pid :action "update"
-                 :data {:title ["a" "a2"] :description [nil "x"] :estimate [5 nil]}}]
+                 :data {:title ["a" "a2"] :description [nil "x"] :icon ["🧦" nil]}}]
                (subvec (events d) before)))))))
 
 

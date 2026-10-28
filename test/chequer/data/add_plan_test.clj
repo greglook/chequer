@@ -64,7 +64,7 @@
 
 
 (def ^:private packing
-  [["Passport" {:title "Charger" :description "USB-C *and* lightning" :icon "🔌" :estimate 2}]
+  [["Passport" {:title "Charger" :description "USB-C *and* lightning" :icon "🔌"}]
    ["Clothes" ["Socks" "Shirts"]]
    ["Toiletries" ["Toothbrush"]]])
 
@@ -85,9 +85,9 @@
                (shape d lid)))
         (let [loaded (lists/load-list d lid)
               charger (second (:ungrouped loaded))]
-          (is (= {:task/description "USB-C *and* lightning" :task/icon "🔌" :task/estimate 2
+          (is (= {:task/description "USB-C *and* lightning" :task/icon "🔌"
                   :task/state :pending :task/source (tasks "Charger")}
-                 (select-keys charger [:task/description :task/icon :task/estimate :task/state :task/source])))
+                 (select-keys charger [:task/description :task/icon :task/state :task/source])))
           (is (= (groups "Clothes") (:list.group/source (:group (first (:groups loaded))))))
           (is (= (tasks "Socks") (:task/source (first (:tasks (first (:groups loaded))))))))
         (testing "events: a create for each row, then one add-plan on the list"

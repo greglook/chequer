@@ -83,7 +83,6 @@
   [t v]
   (list (field "Title" "title" (:task/title t) {:required true})
         (icon-field "Task" (:task/id t) (:task/icon t))
-        (field "Estimate (minutes)" "estimate" (some-> (:task/estimate t) str) {:inputmode "numeric" :size 6})
         (due-field (:task/due-at t) v)
         [:label "Assignee"
          [:select {:name "assignee"}
@@ -114,7 +113,6 @@
       (web/expand-title el-id (:task/title t) description)
       (when (= :skipped state)
         [:span.badge {:class (name state)} (name state)])
-      (when-let [e (:task/estimate t)] [:span.estimate (str e " min")])
       (due-el (:task/due-at t) (lists/overdue? t (:now v)) v)
       (some->> (:task/assignee t) (find-user v) web/user-badge)
       [:span.controls
@@ -127,7 +125,6 @@
          (delete-menu-item "Delete this task?" path))]]
      (web/expanded-card el-id signal
                         [["State" (name state)]
-                         ["Estimate" (some-> (:task/estimate t) (str " min"))]
                          ["Due" (some-> (:task/due-at t) (time/format-date (:tz v)))]
                          ["Assignee" (some->> (:task/assignee t) (find-user v) :title)]]
                         (some-> description md/render))
@@ -466,7 +463,7 @@
 
 (defn- task-attrs
   [tx body req]
-  (merge (select-keys body [:title :description :icon :estimate])
+  (merge (select-keys body [:title :description :icon])
          (due-attrs body req)
          (assignee-attrs tx body)))
 

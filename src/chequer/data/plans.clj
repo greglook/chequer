@@ -47,12 +47,6 @@
     [:fn {:error/message "must be a single emoji"} #(not (re-find #"[A-Za-z0-9\s]" (str/replace % keycap "")))]]])
 
 
-(def Estimate
-  [:maybe {:decode/string #(let [s (blank->nil (str/trim (str %)))]
-                             (if (and s (re-matches #"\d{1,9}" s)) (parse-long s) s))}
-   [:int {:min 0 :error/message "must be a whole number of minutes"}]])
-
-
 (defn- validate
   [schema v]
   (let [decoded (m/decode schema v mt/string-transformer)]
@@ -71,12 +65,6 @@
   "{:value cleaned-icon-or-nil} or {:error message}."
   [s]
   (validate Icon s))
-
-
-(defn validate-estimate
-  "{:value minutes-or-nil} or {:error message}."
-  [s]
-  (validate Estimate s))
 
 
 (defn clean
@@ -103,7 +91,7 @@
 
 
 (def ^:private task-schemas
-  {:title Title :description Description :icon Icon :estimate Estimate})
+  {:title Title :description Description :icon Icon})
 
 
 ;; ## Rows
@@ -138,7 +126,6 @@
    :plan.task/title (:title r)
    :plan.task/description (:description r)
    :plan.task/icon (:icon r)
-   :plan.task/estimate (:estimate r)
    :plan.task/created-at (:created_at r)
    :plan.task/created-by (:created_by r)
    :plan.task/updated-at (:updated_at r)
@@ -298,7 +285,7 @@
 
 (defn create-plan-task!
   "Create a task in plan :plan-id (and group :group-id, if given) from {:title :description
-  :icon :estimate}, appended after its siblings. Returns its id."
+  :icon}, appended after its siblings. Returns its id."
   [tx user {:keys [plan-id group-id] :as attrs}]
   (fetch-existing tx "plan" plan-id)
   (let [v (clean task-schemas (merge {:title nil} attrs))
@@ -317,7 +304,7 @@
 
 
 (defn update-plan-task!
-  "Update the given keys of {:id :title :description :icon :estimate}."
+  "Update the given keys of {:id :title :description :icon}."
   [tx user attrs]
   (update-entity! tx user {:table "plan_task" :schemas task-schemas :entity-type "plan.task"
                            :plan-id-of :plan_id :part-of :id :stamped? true}

@@ -11,7 +11,7 @@ Use this when the user asks to "read the design and suggest updates / what I'm m
 - Use `repo_overview` and `git log` to orient, then read the design doc and README in full.
 - Report findings grouped by category, with the most important item first in each group:
   1. **Correctness bugs in the doc:** broken markdown such as unclosed backticks (cite line numbers), typos, references to entities that don't exist, naming drift, and fields wrongly marked required (for example `started-at` on a pending task).
-  2. **Data model gaps:** missing attribution (`created-by`/`updated-by`/`ended-by`), provenance refs from copies back to their prototypes, undefined merge or dedupe rules, ordering semantics and the type of the `order` field, units (estimates, timestamps), lifecycle and archival, identity keyed by mutable names, integrity rules (same-parent constraints, cascade versus set-null).
+  2. **Data model gaps:** missing attribution (`created-by`/`updated-by`/`ended-by`), provenance refs from copies back to their prototypes, undefined merge or dedupe rules, ordering semantics and the type of the `order` field, units (durations, timestamps), lifecycle and archival, identity keyed by mutable names, integrity rules (same-parent constraints, cascade versus set-null).
   3. **State machine:** allowed transitions, side effects on timestamps, concurrency limits.
   4. **Audit/event log:** polymorphic refs can't be FKs, so add context refs; structured data alongside free text; writing events in the same transaction; history of deleted entities.
   5. **Auth/security:** header-based proxy auth is spoofable without a trusted-proxy allowlist; OIDC implies sessions, logout and CSRF; markdown must be sanitized.

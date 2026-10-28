@@ -195,11 +195,11 @@
       (let [{:keys [lid g1 a]} (seed d u)
             before (count (events d))]
         (is (= #{[:list lid] [:list lid :structure]} (:topics (tx! d #(lists/update-group! % u {:id g1 :title "Clothes" :icon "👕"})))))
-        (tx! d #(lists/update-task! % u {:id a :title "a2" :estimate "5" :due_at 9000 :assignee_id (:id u)}))
+        (tx! d #(lists/update-task! % u {:id a :title "a2" :due_at 9000 :assignee_id (:id u)}))
         (is (= [{:entity_type "list.group" :entity_id g1 :list_id lid :action "update"
                  :data {:title ["G1" "Clothes"] :icon [nil "👕"]}}
                 {:entity_type "task" :entity_id a :list_id lid :action "update"
-                 :data {:title ["a" "a2"] :estimate [nil 5] :due_at [nil 9000] :assignee_id [nil (:id u)]
+                 :data {:title ["a" "a2"] :due_at [nil 9000] :assignee_id [nil (:id u)]
                         :assignee [nil (:title u)]}}]
                (subvec (events d) before)))))))
 

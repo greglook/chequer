@@ -123,7 +123,6 @@
   {:title "title"
    :description "description"
    :icon "icon"
-   :estimate "estimate"
    :due_at "due date"
    :assignee_id "assignee"})
 

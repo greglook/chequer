@@ -57,7 +57,6 @@ list never changes that list.
 - **Text:** titles are short single-line plain text. Descriptions support
   markdown and are sanitized when rendered to HTML.
 - **Icons:** a single emoji.
-- **Estimates:** integer minutes.
 
 
 ### Plan
@@ -108,7 +107,6 @@ Plan tasks have the following properties:
 - `:plan.task/title` (required) a short one-line plain-text title indicating the task
 - `:plan.task/description` long-form text with a detailed description of the task, with support for markdown formatting
 - `:plan.task/icon` a custom emoji icon to give the task
-- `:plan.task/estimate` an estimated duration in minutes the task will take, if applicable
 - `:plan.task/created-at` (required) instant the task was created
 - `:plan.task/created-by` (required, ref) the user who created the task
 - `:plan.task/updated-at` (required) instant the task was last modified
@@ -174,7 +172,6 @@ Tasks have the following properties:
 - `:task/title` (required) a short one-line plain-text title indicating the task
 - `:task/description` long-form text with a detailed description of the task, with support for markdown formatting
 - `:task/icon` a custom emoji icon to give the task
-- `:task/estimate` an estimated duration in minutes the task will take, if applicable
 - `:task/due-at` instant by which the task should be finished, if any
 - `:task/assignee` (optional, ref) the user the task is assigned to, if any
 - `:task/state` (required) state enumeration, one of `:pending`, `:completed`, or `:skipped`
@@ -293,8 +290,8 @@ in the order the user chose. For each plan:
    1, or left ungrouped if it has no group in the plan. The task is
    skipped if that destination already contains a task with the same
    normalized title. Otherwise a new `:pending` task is appended to the
-   destination in the plan's order. Title, description, icon, and
-   estimate are copied, and `source` is set to the plan task.
+   destination in the plan's order. Title, description, and icon are
+   copied, and `source` is set to the plan task.
 
 Because duplicates are skipped, adding a plan that has already been added
 to the list is a no-op for tasks that are still present.

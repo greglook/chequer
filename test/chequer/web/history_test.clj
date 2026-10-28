@@ -64,8 +64,8 @@
   (is (= "greg created task Pack charger" (describe :create "plan.task" {:title "Pack charger"})))
   (is (= "greg deleted task Pack charger" (describe :delete "task" {:title "Pack charger"})))
   (is (= "greg renamed group Kitchen → Cooking" (describe :update "list.group" {:title ["Kitchen" "Cooking"]})))
-  (is (= "greg changed the description, estimate of task Pack charger"
-         (describe :update "plan.task" {:estimate [nil 5] :description [nil "x"]})))
+  (is (= "greg changed the description, icon of task Pack charger"
+         (describe :update "plan.task" {:icon [nil "x"] :description [nil "x"]})))
   (is (= "greg changed the due date of task Pack charger and renamed it to Pack cable"
          (describe :update "task" {:due_at [nil 1] :title ["Pack charger" "Pack cable"]})))
   (is (= "greg assigned task Pack charger to Sam"

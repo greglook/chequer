@@ -12,7 +12,7 @@
   (helpers/with-test-db
     (fn [d]
       (let [user (helpers/create-user! d "u")
-            data {:title ["Old" "New"] :estimate [nil 5]}]
+            data {:title ["Old" "New"] :icon [nil "x"]}]
         (binding [time/*now-ms* (constantly 1234)]
           (db/with-tx [tx d]
             (event/record! tx {:user user :entity-type "plan.task" :entity-id 42 :plan 7 :list nil
@@ -36,7 +36,7 @@
 
 (deftest diff-reports-only-changed-keys
   (is (= {:title ["a" "b"] :icon [nil "x"]}
-         (event/diff {:title "a" :icon nil :estimate 3}
-                     {:title "b" :icon "x" :estimate 3}
-                     [:title :icon :estimate])))
+         (event/diff {:title "a" :icon nil :description "d"}
+                     {:title "b" :icon "x" :description "d"}
+                     [:title :icon :description])))
   (is (= {} (event/diff {:title "a"} {:title "a" :other 1} [:title]))))
