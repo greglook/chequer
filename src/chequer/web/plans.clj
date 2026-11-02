@@ -51,11 +51,9 @@
 (defn- new-task-form
   [plan-id section-id]
   (let [suffix (str plan-id (when section-id (str "-" section-id)))]
-    [:form.new-task {:data-on:submit (str (action "post" (str "/plans/" plan-id "/tasks")) "; el.reset()")}
-     (when section-id [:input {:type "hidden" :name "section" :value (str section-id)}])
-     (field [:span.visually-hidden "New task"] "title" nil {:required true :placeholder "Add a task"})
-     (errors-el (str "new-plan-task-" suffix "-errors"))
-     [:button "Add"]]))
+    (web/new-task-form (str "/plans/" plan-id "/tasks")
+                       (when section-id [:input {:type "hidden" :name "section" :value (str section-id)}])
+                       (errors-el (str "new-plan-task-" suffix "-errors")))))
 
 
 (defn- render-section-header
@@ -267,7 +265,8 @@
                 (web/with-errors-id (str "new-plan-task-" id (when section (str "-" section)) "-errors")
                   #(plans/create-plan-task! tx user (assoc (merge {:title nil}
                                                                   (select-keys body [:title :description :icon]))
-                                                           :plan-id id :section-id section))))))))
+                                                           :plan-id id :section-id section)))))
+            (web/create-task-response req))))
 
 
 (defn update-task

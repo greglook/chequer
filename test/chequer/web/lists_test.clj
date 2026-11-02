@@ -119,6 +119,19 @@
         (is (= 404 (:status (request h :get "/lists/999"))))))))
 
 
+(deftest the-add-button-opens-the-new-tasks-edit-form
+  (with-app
+    (fn [h sys]
+      (let [lid (create-list! h "Chores")]
+        (is (ok? (request h :post (str "/lists/" lid "/tasks") {:signals {:title "Dishes"}}))
+            "Enter adds the task collapsed")
+        (let [r (request h :post (str "/lists/" lid "/tasks?edit=1") {:signals {:title "Laundry"}})
+              id (:id (db/q1 (:db sys) ["SELECT id FROM task WHERE title = 'Laundry'"]))]
+          (is (= 200 (:status r)))
+          (is (= "application/json" (get-in r [:headers "Content-Type"])))
+          (is (= (str "{\"_editTask" id "\":true,\"_focusEdit\":\"_editTask" id "\"}") (:body r))))))))
+
+
 (deftest checking-a-task-pushes-the-task-and-header-to-other-streams
   (with-app
     (fn [h sys]

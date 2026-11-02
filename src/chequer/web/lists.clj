@@ -137,11 +137,9 @@
 (defn- new-task-form
   [list-id section-id]
   (let [suffix (str list-id (when section-id (str "-" section-id)))]
-    [:form.new-task {:data-on:submit (str (action "post" (str "/lists/" list-id "/tasks")) "; el.reset()")}
-     (when section-id [:input {:type "hidden" :name "section" :value (str section-id)}])
-     (field [:span.visually-hidden "New task"] "title" nil {:required true :placeholder "Add a task"})
-     (errors-el (str "new-task-" suffix "-errors"))
-     [:button "Add"]]))
+    (web/new-task-form (str "/lists/" list-id "/tasks")
+                       (when section-id [:input {:type "hidden" :name "section" :value (str section-id)}])
+                       (errors-el (str "new-task-" suffix "-errors")))))
 
 
 (defn- render-section-header
@@ -552,7 +550,8 @@
               (let [section (web/parse-id (:section body))]
                 (web/with-errors-id (str "new-task-" id (when section (str "-" section)) "-errors")
                   #(lists/create-task! tx user (assoc (merge {:title nil} (task-attrs tx body req))
-                                                      :list-id id :section-id section))))))))
+                                                      :list-id id :section-id section)))))
+            (web/create-task-response req))))
 
 
 (defn update-task

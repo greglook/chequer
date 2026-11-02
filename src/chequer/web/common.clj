@@ -237,6 +237,17 @@
   {:data-signals__ifmissing (str "{" signal ": false}")})
 
 
+(defn new-task-form
+  "A form adding a task, with its title, to url. Enter adds the task collapsed; the Add
+  button adds it with its edit form open, through create-task-response."
+  [url & body]
+  [:form.new-task {:data-on:submit (str (action "post" url) "; el.reset()")}
+   (field [:span.visually-hidden "New task"] "title" nil {:required true :placeholder "Add a task"})
+   body
+   ;; Not a submit button, so that Enter's implicit submission doesn't report it as the submitter.
+   [:button.primary {:type "button" :data-on:click (str (action "post" (str url "?edit=1")) "; el.form.reset()")} "Add"]])
+
+
 (defn edit-button
   [signal]
   [:button {:type "button" :data-on:click (str "$" signal " = !$" signal)} "Edit"])
@@ -292,10 +303,15 @@
 
 
 (defn edit-form
-  "An inline edit form, shown while signal is true, that PUTs its fields to path."
+  "An inline edit form, shown while signal is true, that PUTs its fields to path. Setting
+  _focusEdit to signal, as create-task-response does, focuses its title field once."
   [signal path & body]
-  (into [:form.edit {:data-show (str "$" signal) :style "display: none"
-                     :data-on:submit (str (action "put" path) "; $" signal " = false")}]
+  (into [:form.edit {:data-signals__ifmissing "{_focusEdit: ''}"
+                     :data-show (str "$" signal) :style "display: none"
+                     :data-on:submit (str (action "put" path) "; $" signal " = false")
+                     ;; After a frame, so that data-show has shown the form.
+                     :data-effect (str "$_focusEdit === '" signal "' && ($_focusEdit = '', "
+                                       "requestAnimationFrame(() => el.elements.title?.focus()))")}]
         body))
 
 
@@ -473,6 +489,17 @@
              (re-find #"section belongs to another (plan|list)" (str (ex-message e))) (text-response 400 "Bad request")
              :else (throw e)))))
      (text-response 400 "Bad request"))))
+
+
+(defn create-task-response
+  "The ok-response of a task creation, given the new task's id: opens its edit form, with its
+  title focused, when the request asked with ?edit=1."
+  [req]
+  (fn [id]
+    (if (= "1" (query-param req "edit"))
+      (let [signal (toggle-signal "Task" id)]
+        (ds/patch-signals {signal true "_focusEdit" signal}))
+      no-content)))
 
 
 (defn move

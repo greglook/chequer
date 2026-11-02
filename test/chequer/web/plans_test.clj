@@ -160,6 +160,19 @@
         (is (not (str/includes? (task-html bare) "has-description")))))))
 
 
+(deftest the-add-button-opens-the-new-tasks-edit-form
+  (with-app
+    (fn [h sys]
+      (let [pid (create-plan! h "Packing")]
+        (is (= 204 (:status (request h :post (str "/plans/" pid "/tasks") {:title "Socks"})))
+            "Enter adds the task collapsed")
+        (let [r (request h :post (str "/plans/" pid "/tasks?edit=1") {:title "Passport"})
+              id (:id (db/q1 (:db sys) ["SELECT id FROM plan_task WHERE title = 'Passport'"]))]
+          (is (= 200 (:status r)))
+          (is (= "application/json" (get-in r [:headers "Content-Type"])))
+          (is (= (str "{\"_editTask" id "\":true,\"_focusEdit\":\"_editTask" id "\"}") (:body r))))))))
+
+
 (deftest stream-subscribers-receive-the-re-rendered-plan
   (with-app
     (fn [h _]

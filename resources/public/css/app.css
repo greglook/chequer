@@ -391,8 +391,9 @@ details.menu > summary:hover,
   text-decoration: none;
 }
 
-/* Submit buttons, and links styled as the page's main action. */
+/* Submit buttons, and buttons and links styled as the page's main action. */
 form button:not([type="button"]),
+button.primary,
 .button.primary {
   background: var(--accent);
   color: var(--accent-text);
@@ -400,6 +401,7 @@ form button:not([type="button"]),
 }
 
 form button:not([type="button"]):hover,
+button.primary:hover,
 .button.primary:hover {
   background: var(--accent-hover);
   color: var(--accent-text);
