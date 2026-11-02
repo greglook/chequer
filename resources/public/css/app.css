@@ -661,15 +661,9 @@ form.edit > button {
   justify-self: start;
 }
 
-/* Icon fields open an emoji picker below the input. */
-.icon-field {
-  position: relative;
-}
-
+/* Icon fields open the page's emoji picker, which icon-picker.js places by the input. */
 .icon-picker {
-  position: absolute;
-  left: 0;
-  top: calc(100% + 0.25rem);
+  position: fixed;
   z-index: 6;
   width: min(17rem, calc(100vw - 2rem));
   display: grid;
@@ -679,6 +673,10 @@ form.edit > button {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+}
+
+.icon-picker[hidden] {
+  display: none;
 }
 
 .emoji-results {

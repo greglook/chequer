@@ -99,8 +99,8 @@ function toggleTheme() {
 
 
 (defn page
-  "Render a full HTML page as a string: the head, the navigation bar for the request's user
-  and body inside [:main]."
+  "Render a full HTML page as a string: the head, the navigation bar for the request's user,
+  body inside [:main] and the emoji picker the page's icon fields share."
   [req title & body]
   (str "<!DOCTYPE html>"
        (h/html
@@ -113,6 +113,7 @@ function toggleTheme() {
            [:link {:rel "stylesheet" :href "/css/app.css"}]
            [:script {:type "module" :src "/js/datastar.js"}]
            [:script {:src "/js/drag.js" :defer true}]
+           [:script {:src "/js/icon-picker.js" :defer true}]
            [:script (h/raw tz-script)]]
           [:body
            [:header.site
@@ -124,4 +125,5 @@ function toggleTheme() {
                [:button.theme-toggle.solo {:type "button" :onclick "toggleTheme()"
                                            :title "Toggle dark mode" :aria-label "Toggle dark mode"}
                 theme-choices])]]
-           [:main body]]])))
+           [:main body]
+           web/icon-picker]])))

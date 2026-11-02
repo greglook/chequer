@@ -269,27 +269,28 @@
             "glimmer-datastar parses Datastar bodies first; malformed JSON must still be a 400")))))
 
 
-(deftest icon-fields-open-an-emoji-picker
+(deftest icon-fields-share-one-emoji-picker
   (with-app
     (fn [h _]
       (let [pid (create-plan! h "P")
+            _ (request h :post (str "/plans/" pid "/tasks") {:title "T"})
             new-page (:body (request h :get "/plans/new"))
-            plan-page (:body (request h :get (str "/plans/" pid)))]
-        (is (str/includes? new-page "id=\"icon-results-PlanNew\""))
-        (is (str/includes? plan-page (str "id=\"icon-results-Plan" pid "\"")))
-        (is (str/includes? plan-page "name=\"icon\""))))))
+            plan-page (:body (request h :get (str "/plans/" pid)))
+            [_ live] (re-find #"(?s)(<div id=\"live\".*)<div id=\"icon-picker\"" plan-page)]
+        (is (str/includes? new-page "id=\"icon-picker\""))
+        (is (= 1 (count (re-seq #"id=\"icon-picker\"" plan-page))) "one picker for the page")
+        (is (= 2 (count (re-seq #"class=\"icon-field\"" live))) "the plan's and the task's fields")
+        (is (not (str/includes? live "emoji-results")) "live renders don't send the picker")))))
 
 
 (deftest emoji-search-patches-the-picker-results
   (with-app
     (fn [h _]
-      (let [r (request h :get "/emoji?target=icon-results-Task12&q=grapes")]
+      (let [r (request h :get "/emoji?q=grapes")]
         (is (= 200 (:status r)))
         (is (str/includes? (:body r) "datastar-patch-elements"))
-        (is (str/includes? (:body r) "id=\"icon-results-Task12\""))
+        (is (str/includes? (:body r) "id=\"icon-results\""))
         (is (str/includes? (:body r) "data-emoji=\"🍇\"")))
-      (is (str/includes? (:body (request h :get "/emoji?target=icon-results-Task12&q=zzzqqq"))
+      (is (str/includes? (:body (request h :get "/emoji?q=zzzqqq"))
                          "No matching emoji."))
-      (is (= 20 (count (re-seq #"data-emoji=" (:body (request h :get "/emoji?target=icon-results-PlanNew"))))))
-      (is (= 400 (:status (request h :get "/emoji?q=x"))))
-      (is (= 400 (:status (request h :get "/emoji?target=%22%3E%3Cscript&q=x")))))))
+      (is (= 20 (count (re-seq #"data-emoji=" (:body (request h :get "/emoji")))))))))

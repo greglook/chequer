@@ -7,9 +7,9 @@
 
 
 (defn render-results
-  "The results element target: a button for each emoji matching q."
-  [target q]
-  [:div.emoji-results {:id target}
+  "#icon-results: a button for each emoji matching q."
+  [q]
+  [:div#icon-results.emoji-results
    (if-let [matches (seq (emoji/search q))]
      (for [{e :emoji n :name} matches]
        [:button {:type "button" :title n :aria-label n :data-emoji e} e])
@@ -17,15 +17,9 @@
 
 
 (defn results
-  "GET /emoji?target=&q=: the picker's results element for q, as an SSE patch. target is
-  the id of the element to replace."
+  "GET /emoji?q=: the picker's results for q, as an SSE patch of #icon-results."
   [req]
-  (let [target (web/query-param req "target")]
-    (if (and target (re-matches #"icon-results-[A-Za-z0-9]{1,40}" target))
-      (web/sse-response [(ds/patch-elements-event
-                           (html (render-results target (web/query-param req "q")))
-                           nil "outer")])
-      (web/text-response 400 "Bad request"))))
+  (web/sse-response [(ds/patch-elements-event (html (render-results (web/query-param req "q"))) nil "outer")]))
 
 
 (def routes

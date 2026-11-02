@@ -82,7 +82,7 @@
   "The fields of a task form."
   [t v]
   (list (field "Title" "title" (:task/title t) {:required true})
-        (icon-field "Task" (:task/id t) (:task/icon t))
+        (icon-field (:task/icon t))
         (due-field (:task/due-at t) v)
         [:label "Assignee"
          [:select {:name "assignee"}
@@ -162,7 +162,7 @@
                            {:data-task-count (str task-count)})]]
      (edit-form signal path
                 (field "Title" "title" (:list.section/title section) {:required true})
-                (icon-field "Section" id (:list.section/icon section))
+                (icon-field (:list.section/icon section))
                 (errors-el (str "list-section-" id "-errors"))
                 [:button "Save"])]))
 
@@ -233,7 +233,7 @@
       [:button.danger {:type "button" :data-on:click (web/confirmed "Delete this list?" (str "@delete('" path "')"))} "Delete"]]
      (edit-form signal path
                 (field "Title" "title" (:list/title l) {:required true})
-                (icon-field "List" id (:list/icon l))
+                (icon-field (:list/icon l))
                 (due-field (:list/due-at l) v)
                 [:label "Description" [:textarea {:name "description" :rows 3} (or (:list/description l) "")]]
                 (errors-el (str "list-" id "-errors"))
@@ -405,7 +405,7 @@
                               [:h1 "New list"]
                               [:form {:method "post" :action "/lists" :data-on:submit (action "post" "/lists")}
                                (field "Title" "title" nil {:required true :autofocus true})
-                               (icon-field "List" nil nil)
+                               (icon-field nil)
                                (field "Due" "due" nil {:type "date"})
                                [:label "Description" [:textarea {:name "description" :rows 4}]]
                                (plan-picker (plans/list-plans db)

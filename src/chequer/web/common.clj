@@ -205,33 +205,24 @@
 
 
 (defn icon-field
-  "An icon input that opens an emoji picker when clicked. The picker's search box fetches
-  up to 20 matches from /emoji as you type; picking one fills the input and closes it.
-  kind and id (nil in a form for a new entity) make the picker's signal and ids unique on
-  the page."
-  [kind id value]
-  (let [k (str kind (or id "New"))
-        signal (str "$_icon" k)
-        results (str "icon-results-" k)
-        picker "el.closest('.icon-field')"
-        search (str picker ".querySelector('input[type=search]')")
-        icon (str picker ".querySelector('input[name=icon]')")
-        fetch (str "@get('/emoji?target=" results "&q=' + encodeURIComponent(" search ".value))")]
-    [:div.icon-field {:data-signals__ifmissing (str "{_icon" k ": false}")
-                      :data-on:click__outside (str signal " = false")
-                      :data-on:keydown (str "evt.key === 'Escape' && (" signal " = false)")}
-     (field "Icon" "icon" value {:size 4 :autocomplete "off"
-                                 :data-on:click (str signal " = true; " fetch "; "
-                                                     "setTimeout(() => " search ".focus())")})
-     [:div.icon-picker {:data-show signal :style "display: none"
-                        :data-on:click (str "evt.target.dataset.emoji && "
-                                            "(" icon ".value = evt.target.dataset.emoji, " signal " = false)")}
-      [:input {:type "search" :placeholder "Search emoji" :aria-label "Search emoji" :autocomplete "off"
-               :data-on:input__debounce.150ms fetch
-               :data-on:keydown (str "evt.key === 'Enter' && (evt.preventDefault(), "
-                                     picker ".querySelector('[data-emoji]')?.click())")}]
-      [:div.emoji-results {:id results}]
-      [:button {:type "button" :data-on:click (str icon ".value = ''; " signal " = false")} "Clear icon"]]]))
+  "An icon input, which opens the page's emoji picker (see icon-picker) when clicked."
+  [value]
+  [:div.icon-field (field "Icon" "icon" value {:size 4 :autocomplete "off"})])
+
+
+(def icon-picker
+  "The emoji picker every icon field on the page shares, which the layout renders once,
+  outside the live content, so that live renders don't send it. /js/icon-picker.js opens it
+  under the icon input clicked and fills that input with the emoji picked. Its search box
+  fetches up to 20 matches from /emoji into #icon-results as you type, and when the picker
+  opens."
+  (let [fetch "@get('/emoji?q=' + encodeURIComponent(el.value))"]
+    [:div#icon-picker.icon-picker {:hidden true}
+     [:input {:type "search" :placeholder "Search emoji" :aria-label "Search emoji" :autocomplete "off"
+              :data-on:input__debounce.150ms fetch
+              :data-on:icon-picker-open fetch}]
+     [:div#icon-results.emoji-results]
+     [:button.clear {:type "button"} "Clear icon"]]))
 
 
 (defn toggle-signal

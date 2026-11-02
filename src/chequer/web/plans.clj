@@ -19,7 +19,7 @@
   "The fields of a task form."
   [t]
   (list (field "Title" "title" (:plan.task/title t) {:required true})
-        (icon-field "Task" (:plan.task/id t) (:plan.task/icon t))
+        (icon-field (:plan.task/icon t))
         [:label "Description" [:textarea {:name "description" :rows 3} (or (:plan.task/description t) "")]]))
 
 
@@ -74,7 +74,7 @@
        (delete-icon-button (confirmed "Delete this section and its tasks?" (str "@delete('" path "')")))]]
      (edit-form signal path
                 (field "Title" "title" (:plan.section/title section) {:required true})
-                (icon-field "Section" id (:plan.section/icon section))
+                (icon-field (:plan.section/icon section))
                 (errors-el (str "plan-section-" id "-errors"))
                 [:button "Save"])]))
 
@@ -119,7 +119,7 @@
       [:button.danger {:type "button" :data-on:click (confirmed "Delete this plan?" (str "@delete('" path "')"))} "Delete"]]
      (edit-form signal path
                 (field "Title" "title" (:plan/title p) {:required true})
-                (icon-field "Plan" id (:plan/icon p))
+                (icon-field (:plan/icon p))
                 [:label "Description" [:textarea {:name "description" :rows 3} (or (:plan/description p) "")]]
                 (errors-el (str "plan-" id "-errors"))
                 [:button "Save"])]))
@@ -182,7 +182,7 @@
                               [:h1 "New plan"]
                               [:form {:method "post" :action "/plans" :data-on:submit (action "post" "/plans")}
                                (field "Title" "title" nil {:required true :autofocus true})
-                               (icon-field "Plan" nil nil)
+                               (icon-field nil)
                                [:label "Description" [:textarea {:name "description" :rows 4}]]
                                (errors-el "new-plan-errors")
                                [:button "Create"]])))
