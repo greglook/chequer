@@ -138,13 +138,13 @@
     (is (= resp r) "response passes through unchanged")
     (is (= 1 (count entries)))
     (is (= :info level))
-    (is (re-matches #"POST /lists\?a=1 201 \d+ms" message))))
+    (is (re-matches #"POST /lists\?a=1 201 \d+\.\d ms" message))))
 
 
 (deftest request-log-omits-empty-query
   (let [[_ [[_ message]]] (logged (constantly {:status 200})
                                   {:request-method :get :uri "/" :headers {}})]
-    (is (re-matches #"GET / 200 \d+ms" message))))
+    (is (re-matches #"GET / 200 \d+\.\d ms" message))))
 
 
 (deftest request-log-records-handler-exceptions
@@ -154,7 +154,7 @@
     (is (= "boom" (ex-message r)) "exception is rethrown")
     (is (= 1 (count entries)))
     (is (= :error level))
-    (is (re-matches #"GET /x ERROR \d+ms boom" message))))
+    (is (re-matches #"GET /x ERROR \d+\.\d ms boom" message))))
 
 
 (deftest start-and-stop-run-the-system
