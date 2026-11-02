@@ -49,6 +49,7 @@
       (let [r (handler {:request-method :get :uri "/plans/1" :query-string "datastar-sse=true" :headers {}})
             ch (:body r)]
         (is (= "text/event-stream; charset=utf-8" (get-in r [:headers "Content-Type"])))
+        (is (= "no" (get-in r [:headers "X-Accel-Buffering"])) "nginx doesn't buffer the stream")
         (is (str/includes? (take-frame ch) "<p>rev 0 true</p>"))
         (live/touch! l #{[:plan 1]})
         (let [frame (take-frame ch)]

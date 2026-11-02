@@ -5,12 +5,12 @@
     [chequer.db :as db]
     [chequer.live :as live]
     [chequer.markdown :as md]
-    [chequer.web.common :as web :refer [action confirmed delete-icon-button delete-menu-item
-                                        edit-button edit-form edit-icon-button edit-toggle errors-el
-                                        field html html-response icon-field more-menu move-buttons mutate raw
-                                        text-response toggle-signal]]
-    [chequer.web.layout :as layout]
-    [jolt.datastar.core :as ds]))
+    [chequer.web.common :as web
+     :refer [action confirmed delete-icon-button delete-menu-item
+             edit-button edit-form edit-icon-button edit-toggle errors-el
+             field html html-response icon-field more-menu move-buttons mutate raw
+             text-response toggle-signal]]
+    [chequer.web.layout :as layout]))
 
 
 ;; ## Rendering

@@ -5,7 +5,8 @@
 
   Every SSE stream goes out through a relay, which sends a heartbeat comment when the
   stream has been quiet for a while, so proxies keep idle streams open, and which counts
-  the open streams."
+  the open streams. Streams also tell nginx not to buffer them, which would otherwise hold
+  back the tail of a large frame until enough later frames arrive to push it out."
   (:require
     [clojure.core.async :as async]
     [glimmer.ratom :as ratom]
@@ -200,7 +201,7 @@
 (defn wrap-live
   "The glimmer-datastar middleware. It reads the body of Datastar requests for signals,
   so the body is buffered and handed to handler unread. A body it can't parse is a 400.
-  SSE streams go out through a relay that adds heartbeats."
+  SSE streams go out through a relay that adds heartbeats, marked as unbuffered for nginx."
   [handler l]
   (let [inner (ds/wrap-datastar (fn [req]
                                   (vreset! (::reached req) true)
@@ -216,7 +217,8 @@
                          (inner (assoc req :body (StringReader. s) ::body s)))
                        (inner req))]
             (cond-> resp
-              (stream? resp) (update :body #(relay l %))))
+              (stream? resp) (-> (update :body #(relay l %))
+                                 (assoc-in [:headers "X-Accel-Buffering"] "no"))))
           (catch Exception e
             (if @reached
               (throw e)
