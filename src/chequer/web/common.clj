@@ -338,9 +338,9 @@
 
 
 (defn collapse-toggle
-  "A button in the header of the section element-id, holding the section's icon and title and
-  its task count while it's collapsed, that collapses or expands it and remembers that in
-  localStorage."
+  "A button in the header of the section element-id, holding the section's icon and title and,
+  while it's collapsed, its task count, which may be a string like \"3/8\", that collapses or
+  expands it and remembers that in localStorage."
   [element-id icon title task-count]
   (let [signal (str "$" (collapse-signal element-id))
         k (str "'chequer:collapsed:" element-id "'")]

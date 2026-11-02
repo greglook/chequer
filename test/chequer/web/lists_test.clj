@@ -114,6 +114,7 @@
           (is (str/includes? body (str "id=\"list-" lid "-header\"")))
           (is (str/includes? body (str "id=\"list-section-" g "-header\"")))
           (is (str/includes? body "data-task-count=\"2\"") "deleting the section confirms with its task count")
+          (is (str/includes? body "(0/2)") "the collapsed section counts its closed tasks")
           (is (str/includes? body "0 of 3 done"))
           (is (< (str/index-of body "Passport") (str/index-of body "Clothes")) "unsectioned tasks come first"))
         (is (= 404 (:status (request h :get "/lists/999"))))))))
@@ -174,7 +175,7 @@
   (set (map second (re-seq #"id=\"(task-\d+|list-\d+-header|list-section-\d+-header)\"" frame))))
 
 
-(deftest a-state-change-sends-exactly-the-task-and-the-header
+(deftest a-state-change-sends-exactly-the-task-and-the-headers
   (with-app
     (fn [h sys]
       (let [lid (create-list! h "Trip")
@@ -195,7 +196,9 @@
             (let [frame (take-frame ch)]
               (is (str/includes? frame "data: mode outer"))
               (is (not (str/includes? frame "data: selector")) "parts are replaced by id")
-              (is (= #{(str "task-" socks) (str "list-" lid "-header")} (part-ids frame)))))
+              (is (= #{(str "task-" socks) (str "list-" lid "-header") (str "list-section-" gid "-header")}
+                     (part-ids frame)))
+              (is (str/includes? frame "(1/2)") "the section counts its closed tasks")))
           (testing "renaming a task sends only the task"
             (is (ok? (request h :put (str "/tasks/" shirts) {:signals {:title "Shirts x3"}})))
             (doseq [ch streams]

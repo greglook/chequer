@@ -355,6 +355,14 @@
                    (db/q db ["SELECT state, count(*) AS n FROM task WHERE list_id = ? GROUP BY state" id]))}))
 
 
+(defn load-section-counts
+  "{state n} for the tasks in list section id."
+  [db id]
+  (into (zipmap states (repeat 0))
+        (map (juxt (comp keyword :state) :n))
+        (db/q db ["SELECT state, count(*) AS n FROM task WHERE section_id = ? GROUP BY state" id])))
+
+
 (defn load-list-structure
   "{:unsectioned [task-id] :sections [{:section g :task-ids [...]}]} for list id in display order,
   or nil."
