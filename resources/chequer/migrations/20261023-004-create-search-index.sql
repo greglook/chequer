@@ -63,17 +63,3 @@ CREATE TRIGGER task_search_update AFTER UPDATE OF title, description, list_id ON
 
 CREATE TRIGGER task_search_delete AFTER DELETE ON task BEGIN
   DELETE FROM search WHERE rowid = OLD.id * 4 + 3; END;
-
--- Backfill (kept in step with chequer.search/rebuild-search!)
-
-INSERT INTO search (rowid, title, description, kind, entity_id, owner_kind, owner_id)
-  SELECT id * 4 + 0, title, description, 'plan', id, 'plan', id FROM plan;
-
-INSERT INTO search (rowid, title, description, kind, entity_id, owner_kind, owner_id)
-  SELECT id * 4 + 1, title, description, 'plan.task', id, 'plan', plan_id FROM plan_task;
-
-INSERT INTO search (rowid, title, description, kind, entity_id, owner_kind, owner_id)
-  SELECT id * 4 + 2, title, description, 'list', id, 'list', id FROM list;
-
-INSERT INTO search (rowid, title, description, kind, entity_id, owner_kind, owner_id)
-  SELECT id * 4 + 3, title, description, 'task', id, 'list', list_id FROM task;

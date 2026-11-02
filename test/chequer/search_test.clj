@@ -98,34 +98,6 @@
         (is (empty? (index-rows d)) "cascaded deletes clear the plan's and list's tasks")))))
 
 
-(deftest backfill-indexes-existing-data
-  (let [path (helpers/temp-db-path)
-        d (db/open path)
-        [before [search-migration]] (split-at 3 (mapv #'db/load-migration db/migration-files))]
-    (try
-      (is (= "create-search-index" (:name search-migration)))
-      (db/migrate! d (vec before))
-      ;; Rows are inserted directly, since the data functions write the latest schema.
-      (let [u (helpers/create-user! d "greg")
-            stamps {:created_at 0 :created_by (:id u) :updated_at 0 :updated_by (:id u)}
-            pid (tx d (db/insert! tx :plan (assoc stamps :title "Packing")))
-            ptid (tx d (db/insert! tx :plan_task (assoc stamps :plan_id pid :rank 1.0 :title "Charger")))
-            lid (tx d (db/insert! tx :list (assoc stamps :title "Trip")))
-            tid (tx d (db/insert! tx :task (assoc stamps :list_id lid :rank 1.0 :title "Charger")))]
-        (db/migrate! d (conj (vec before) search-migration))
-        (is (= #{["plan" pid "plan" pid "Packing" nil]
-                 ["plan.task" ptid "plan" pid "Charger" nil]
-                 ["list" lid "list" lid "Trip" nil]
-                 ["task" tid "list" lid "Charger" nil]}
-               (index-rows d)))
-        (testing "triggers find backfilled rows"
-          (tx d (lists/update-task! tx u {:id tid :title "Cable"}))
-          (is (= [["plan.task" ptid]] (found d "charger")))))
-      (finally
-        (db/close! d)
-        (helpers/delete-db-files path)))))
-
-
 (deftest rebuild-recovers-a-broken-index
   (helpers/with-test-db
     (fn [d]

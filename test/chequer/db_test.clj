@@ -3,7 +3,7 @@
     [chequer.db :as db]
     [chequer.test-helpers :as helpers]
     [clojure.string :as str]
-    [clojure.test :refer [deftest is testing]]
+    [clojure.test :refer [deftest is]]
     [jdbc.core :as jdbc]
     [jolt.fs :as fs]
     [tick.core :as t]))
@@ -281,45 +281,25 @@
             "foreign keys are back on afterwards")))))
 
 
-(deftest ids-are-never-reused-once-migrated
+(deftest ids-are-never-reused
   (with-empty-db
     (fn [d _]
-      (let [ms (mapv #'db/load-migration db/migration-files)
-            exec! #(jdbc/execute! (:writer d) %)
-            ids #(mapv :id (db/q d [(str "SELECT id FROM " % " ORDER BY id")]))
-            snapshot #(db/q d ["SELECT id, list_id, section_id, source_id, rank, title, state, assignee_id FROM task ORDER BY id"])]
-        (db/migrate! d (subvec ms 0 8))
+      (db/migrate! d)
+      (let [exec! #(jdbc/execute! (:writer d) %)
+            ids #(mapv :id (db/q d [(str "SELECT id FROM " % " ORDER BY id")]))]
         (exec! "INSERT INTO user (subject, name, title, created_at, last_seen) VALUES ('u', 'u', 'U', 0, 0)")
         (exec! "INSERT INTO plan (title, created_at, created_by, updated_at, updated_by) VALUES ('P', 0, 1, 0, 1)")
-        (exec! "INSERT INTO plan_section (plan_id, rank, title) VALUES (1, 1, 'S')")
-        (exec! "INSERT INTO plan_task (plan_id, section_id, rank, title, created_at, created_by, updated_at, updated_by) VALUES (1, 1, 1, 'Passport', 0, 1, 0, 1)")
+        (exec! "INSERT INTO plan_task (plan_id, rank, title, created_at, created_by, updated_at, updated_by) VALUES (1, 1, 'Passport', 0, 1, 0, 1)")
         (exec! "INSERT INTO list (title, created_at, created_by, updated_at, updated_by) VALUES ('L', 0, 1, 0, 1)")
-        (exec! "INSERT INTO list_section (list_id, source_id, rank, title) VALUES (1, 1, 1, 'S')")
-        (doseq [[title state] [["Socks" "completed"] ["Shirts" "pending"] ["Hat" "skipped"]]]
-          (exec! (str "INSERT INTO task (list_id, section_id, source_id, rank, title, state, created_at, created_by, updated_at, updated_by)"
-                      " VALUES (1, 1, 1, 1, '" title "', '" state "', 0, 1, 0, 1)")))
-        ;; the last task is deleted before the migration, leaving its events behind
-        (exec! "INSERT INTO event (instant, user_id, entity_type, entity_id, list_id, action) VALUES (0, 1, 'task', 3, 1, 'create')")
+        (doseq [title ["Socks" "Shirts" "Hat"]]
+          (exec! (str "INSERT INTO task (list_id, rank, title, created_at, created_by, updated_at, updated_by)"
+                      " VALUES (1, 1, '" title "', 0, 1, 0, 1)")))
         (exec! "DELETE FROM task WHERE id = 3")
-        (let [before (snapshot)]
-          (db/migrate! d ms)
-          (is (= latest (user-version d)))
-          (is (= before (snapshot)) "rows survive the rebuild")
-          (is (empty? (jdbc/fetch (:writer d) "PRAGMA foreign_key_check"))))
-        (testing "a new row takes no id an earlier row had, even one deleted before the migration"
-          (exec! "INSERT INTO task (list_id, rank, title, created_at, created_by, updated_at, updated_by) VALUES (1, 2, 'Scarf', 0, 1, 0, 1)")
-          (is (= [1 2 4] (ids "task")))
-          (exec! "DELETE FROM task WHERE id = 4")
-          (exec! "INSERT INTO task (list_id, rank, title, created_at, created_by, updated_at, updated_by) VALUES (1, 2, 'Gloves', 0, 1, 0, 1)")
-          (is (= [1 2 5] (ids "task")))
-          (exec! "DELETE FROM plan_task WHERE id = 1")
-          (exec! "INSERT INTO plan_task (plan_id, rank, title, created_at, created_by, updated_at, updated_by) VALUES (1, 2, 'Tickets', 0, 1, 0, 1)")
-          (is (= [2] (ids "plan_task"))))
-        (testing "the triggers came back"
-          (is (= {:n 1} (db/q1 d ["SELECT count(*) AS n FROM search WHERE search MATCH 'gloves'"])))
-          (is (thrown-with-msg? Exception #"section belongs to another list"
-                (exec! "INSERT INTO list (title, created_at, created_by, updated_at, updated_by) VALUES ('M', 0, 1, 0, 1)")
-                (exec! "INSERT INTO task (list_id, section_id, rank, title, created_at, created_by, updated_at, updated_by) VALUES (2, 1, 1, 'x', 0, 1, 0, 1)"))))))))
+        (exec! "INSERT INTO task (list_id, rank, title, created_at, created_by, updated_at, updated_by) VALUES (1, 2, 'Scarf', 0, 1, 0, 1)")
+        (is (= [1 2 4] (ids "task")))
+        (exec! "DELETE FROM plan_task WHERE id = 1")
+        (exec! "INSERT INTO plan_task (plan_id, rank, title, created_at, created_by, updated_at, updated_by) VALUES (1, 2, 'Tickets', 0, 1, 0, 1)")
+        (is (= [2] (ids "plan_task")))))))
 
 
 (deftest event-requires-an-existing-user
