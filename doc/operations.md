@@ -11,8 +11,10 @@ needs these shared libraries on the host at runtime:
 - `libsqlite3` (required)
 - `libssl` and `libcrypto` (OpenSSL 3 or 1.1, required for OIDC mode)
 - `libz` (optional)
+- `libbrotlienc` (optional, compresses live-update streams)
 
-On Debian or Ubuntu, `apt-get install libsqlite3-0 libssl3 zlib1g` covers them.
+On Debian or Ubuntu, `apt-get install libsqlite3-0 libssl3 zlib1g libbrotli1`
+covers them.
 The static assets and database migrations are embedded in the binary, so it
 runs from any directory.
 

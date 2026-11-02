@@ -311,6 +311,10 @@ commits, the server pushes updated fragments to every stream viewing the
 affected plan or list, so all users see changes immediately. Concurrent
 field edits are last-write-wins. The event log shows who changed what.
 
+A stream to a client that accepts brotli is compressed as one brotli stream,
+flushed after every frame. The compressor keeps its window between frames, so a
+re-render that mostly repeats the last one costs little.
+
 Mutating requests are protected against CSRF by the `SameSite=Lax` session
 cookie plus an `Origin` header check against the configured base URL.
 

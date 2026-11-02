@@ -62,6 +62,13 @@
   {:git/url "https://github.com/weavejester/hiccup"
    :git/sha "b6b12097ba973141fe87c1b4d6a27ddcce5d5929"}}
 
+ ;; libbrotlienc compresses SSE streams. Optional, since without it they go out plain.
+ :jolt/native
+ [{:name "brotlienc"
+   :optional true
+   :darwin ["libbrotlienc.1.dylib" "libbrotlienc.dylib"]
+   :linux ["libbrotlienc.so.1" "libbrotlienc.so"]}]
+
  :jolt/build
  {:embed ["resources"]}
 

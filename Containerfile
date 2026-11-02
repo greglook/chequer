@@ -46,7 +46,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      ca-certificates curl libsqlite3-0 libssl3t64 libuuid1 tzdata zlib1g \
+      ca-certificates curl libbrotli1 libsqlite3-0 libssl3t64 libuuid1 tzdata zlib1g \
  && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --user-group --uid 10001 --home-dir /data --no-create-home chequer \

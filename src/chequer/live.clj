@@ -6,8 +6,10 @@
   Every SSE stream goes out through a relay, which sends a heartbeat comment when the
   stream has been quiet for a while, so proxies keep idle streams open, and which counts
   the open streams. Streams also tell nginx not to buffer them, which would otherwise hold
-  back the tail of a large frame until enough later frames arrive to push it out."
+  back the tail of a large frame until enough later frames arrive to push it out. A stream
+  to a client accepting brotli is compressed as one brotli stream, flushed at every frame."
   (:require
+    [chequer.brotli :as brotli]
     [clojure.core.async :as async]
     [glimmer.ratom :as ratom]
     [jolt.datastar.core :as ds])
@@ -121,10 +123,23 @@
        (not (string? body))))
 
 
+(defn- compress
+  "Stream response resp brotli-compressed, if the client of req accepts it and an encoder
+  is available; otherwise resp as it is."
+  [req resp]
+  (if-let [ch (and (brotli/acceptable? (get-in req [:headers "accept-encoding"]))
+                   (brotli/compress-channel (:body resp)))]
+    (-> resp
+        (assoc :body ch)
+        (update :headers assoc "Content-Encoding" "br" "Vary" "Accept-Encoding"))
+    resp))
+
+
 (defn wrap-live
   "The glimmer-datastar middleware. It reads the body of Datastar requests for signals,
   so the body is buffered and handed to handler unread. A body it can't parse is a 400.
-  SSE streams go out through a relay that adds heartbeats, marked as unbuffered for nginx."
+  SSE streams go out through a relay that adds heartbeats, marked as unbuffered for nginx
+  and brotli-compressed when the client accepts it."
   [handler l]
   (let [inner (ds/wrap-datastar (fn [req]
                                   (vreset! (::reached req) true)
@@ -139,9 +154,11 @@
                        (let [s (slurp body)]
                          (inner (assoc req :body (StringReader. s) ::body s)))
                        (inner req))]
-            (cond-> resp
-              (stream? resp) (-> (update :body #(relay l %))
-                                 (assoc-in [:headers "X-Accel-Buffering"] "no"))))
+            (if (stream? resp)
+              (compress req (-> resp
+                                (update :body #(relay l %))
+                                (assoc-in [:headers "X-Accel-Buffering"] "no")))
+              resp))
           (catch Exception e
             (if @reached
               (throw e)

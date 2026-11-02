@@ -1,5 +1,6 @@
 (ns chequer.live-test
   (:require
+    [chequer.brotli-test :as brotli-test]
     [chequer.live :as live]
     [clojure.core.async :as async]
     [clojure.string :as str]
@@ -114,6 +115,32 @@
               ch (:body (ended (sse-request)))]
           (is (nil? (take-frame ch)) "is closed")
           (is (zero? (await-streams l 0)) "is no longer counted")))
+      (finally
+        (live/stop! l)))))
+
+
+(deftest streams-are-brotli-compressed-for-clients-accepting-it
+  (let [l (live/live {:heartbeat-ms 50})
+        handler (live/wrap-live (fn [_] {:status 200 :body (str "<p>rev " @(live/cell l [:plan 1]) "</p>")}) l)]
+    (try
+      (testing "a client accepting br"
+        (let [r (handler (assoc (sse-request) :headers {"accept-encoding" "gzip, deflate, br"}))
+              ch (:body r)
+              decode (brotli-test/decoder)
+              text #(first (decode (take-frame ch)))]
+          (is (= "br" (get-in r [:headers "Content-Encoding"])))
+          (is (= "Accept-Encoding" (get-in r [:headers "Vary"])))
+          (is (str/includes? (text) "<p>rev 0</p>"))
+          (is (= live/heartbeat (text)) "gets heartbeats compressed too")
+          (live/touch! l #{[:plan 1]})
+          (is (str/includes? (text) "<p>rev 1</p>"))
+          (async/close! ch)
+          (is (zero? (await-streams l 0)) "and is released when it goes away")))
+      (testing "a client not accepting br"
+        (let [r (handler (assoc (sse-request) :headers {"accept-encoding" "gzip"}))]
+          (is (nil? (get-in r [:headers "Content-Encoding"])))
+          (is (str/includes? (take-frame (:body r)) "<p>rev 1</p>"))
+          (async/close! (:body r))))
       (finally
         (live/stop! l)))))
 
