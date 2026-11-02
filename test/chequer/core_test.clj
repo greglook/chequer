@@ -76,11 +76,21 @@
         (is (str/starts-with? (get-in r [:headers "Content-Type"]) "text/css"))))))
 
 
+(deftest serves-favicon
+  (with-handler
+    (fn [h]
+      (let [r (get-uri h "/img/favicon.svg")]
+        (is (= 200 (:status r)))
+        (is (str/starts-with? (get-in r [:headers "Content-Type"]) "image/svg+xml"))))))
+
+
 (deftest static-files-reject-unknown-types-and-traversal
   (with-handler
     (fn [h]
       (is (= 404 (:status (get-uri h "/js/missing.js"))))
       (is (= 404 (:status (get-uri h "/js/../css/app.css"))))
+      (is (= 404 (:status (get-uri h "/img/datastar.js"))))
+      (is (= 404 (:status (get-uri h "/js/favicon.svg"))))
       (is (= 404 (:status (get-uri h "/css/../../deps.edn"))))
       (is (= 404 (:status (get-uri h "/js/")))))))
 

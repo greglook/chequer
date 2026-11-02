@@ -109,6 +109,7 @@ function toggleTheme() {
            [:meta {:charset "utf-8"}]
            [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
            [:title (str title " - Chequer")]
+           [:link {:rel "icon" :type "image/svg+xml" :href "/img/favicon.svg"}]
            [:script (h/raw theme-script)]
            [:link {:rel "stylesheet" :href "/css/app.css"}]
            [:script {:type "module" :src "/js/datastar.js"}]

@@ -79,7 +79,8 @@
   [uri]
   (or (= uri "/healthz")
       (str/starts-with? uri "/js/")
-      (str/starts-with? uri "/css/")))
+      (str/starts-with? uri "/css/")
+      (str/starts-with? uri "/img/")))
 
 
 (defn- single-mode

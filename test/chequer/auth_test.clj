@@ -131,7 +131,7 @@
   (with-db
     (fn [d]
       (let [h (auth/wrap-auth echo-user (:auth proxy-cfg))]
-        (doseq [uri ["/healthz" "/js/datastar.js" "/css/app.css"]]
+        (doseq [uri ["/healthz" "/js/datastar.js" "/css/app.css" "/img/favicon.svg"]]
           (let [r (h (request d proxy-cfg :uri uri :remote-addr "203.0.113.9"))]
             (is (= 200 (:status r)) uri)
             (is (nil? (:body r)) uri)))

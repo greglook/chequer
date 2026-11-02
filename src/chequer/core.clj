@@ -46,27 +46,30 @@
                search/routes)))
 
 
-(def ^:private static-content-types
-  "Allow-list of static file extensions and their Content-Type."
-  {"js" "text/javascript; charset=utf-8"
-   "css" "text/css; charset=utf-8"})
+(def ^:private static-dirs
+  "Allow-list of static directories, each with the one file extension it serves and that
+  extension's Content-Type."
+  {"js" ["js" "text/javascript; charset=utf-8"]
+   "css" ["css" "text/css; charset=utf-8"]
+   "img" ["svg" "image/svg+xml; charset=utf-8"]})
 
 
 (defn wrap-static
-  "Serve files under /js/ and /css/ from resources/public with a content-hash ETag, for
-  wrap-not-modified to revalidate. Only a flat file name with
-  an allow-listed extension is served; anything else falls through to handler. Unlike
+  "Serve files under /js/, /css/ and /img/ from resources/public with a content-hash ETag,
+  for wrap-not-modified to revalidate. Only a flat file name with the directory's
+  allow-listed extension is served; anything else falls through to handler. Unlike
   ring.middleware.resource, this works for resources embedded in a built binary, which
   can't be opened as a URL connection."
   [handler]
   (fn [{:keys [request-method uri] :as req}]
-    (let [[_ dir file ext] (re-matches #"/(js|css)/([A-Za-z0-9_-][A-Za-z0-9._-]*\.(js|css))" uri)
+    (let [[_ dir file ext] (re-matches #"/(js|css|img)/([A-Za-z0-9_-][A-Za-z0-9._-]*\.(js|css|svg))" uri)
+          [dir-ext content-type] (static-dirs dir)
           resource (when (and (= :get request-method) file)
                      (io/resource (str "public/" dir "/" file)))]
-      (if (and resource (= dir ext))
+      (if (and resource (= dir-ext ext))
         (let [body (slurp resource)]
           {:status 200
-           :headers {"Content-Type" (static-content-types ext)
+           :headers {"Content-Type" content-type
                      "Cache-Control" "public, no-cache"
                      "ETag" (str "\"" (Integer/toHexString (hash body)) "\"")}
            :body body})
