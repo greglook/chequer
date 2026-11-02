@@ -191,6 +191,30 @@
             (run! async/close! streams)))))))
 
 
+(deftest a-new-task-after-deleting-the-last-renders-afresh
+  (with-app
+    (fn [h sys]
+      (let [lid (create-list! h "Trip")
+            _ (request h :post (str "/lists/" lid "/tasks") {:signals {:title "Passport"}})
+            _ (request h :post (str "/lists/" lid "/tasks") {:signals {:title "Charger"}})
+            b (peek (task-ids sys))
+            ch (:body (request h :get (str "/lists/" lid "?datastar-sse=true&datastar-selector=%23live")))]
+        (try
+          (take-frame ch)
+          ;; a second render of the task admits it to the component cache
+          (request h :put (str "/tasks/" b) {:signals {:title "USB charger"}})
+          (take-frame ch)
+          (request h :delete (str "/tasks/" b))
+          (take-frame ch)
+          (request h :post (str "/lists/" lid "/tasks") {:signals {:title "Tickets"}})
+          (is (< b (peek (task-ids sys))) "the deleted task's id isn't reused")
+          (let [frame (take-frame ch)]
+            (is (str/includes? frame "Tickets"))
+            (is (not (str/includes? frame "USB charger")) "not the deleted task's cached HTML"))
+          (finally
+            (async/close! ch)))))))
+
+
 (deftest task-states-and-moves
   (with-app
     (fn [h sys]

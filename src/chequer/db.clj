@@ -166,7 +166,12 @@
   "Apply pending migrations (default: all migrations) in one transaction and
   return the vector of migrations applied. A non-empty database is first
   copied to <path>.pre-v<N>.bak with VACUUM INTO, where N is the version being
-  migrated to; an existing backup is never overwritten."
+  migrated to; an existing backup is never overwritten.
+
+  Migrations run with foreign keys off, so that one can rebuild a table the way
+  SQLite's docs lay out (create, copy, drop, rename) without the drop cascading
+  to the rows that refer to it. The transaction only commits if
+  PRAGMA foreign_key_check then finds every reference intact."
   ([db]
    (let [migrations (mapv load-migration migration-files)]
      (migrate! db migrations)))
@@ -178,12 +183,20 @@
          (let [target (:version (last pending))]
            (when-not (empty-database? writer)
              (vacuum-into! writer (migration-backup-path path target)))
-           (jdbc/atomic writer
-             (doseq [migration pending]
-               (log/info "Applying migration" (str/replace (:file migration) #"\.sql$" ""))
-               (doseq [statement @(:statements migration)]
-                 (jdbc/execute! writer statement)))
-             (jdbc/execute! writer (str "PRAGMA user_version = " target)))))
+           ;; a no-op inside a transaction, so set outside it
+           (jdbc/execute! writer "PRAGMA foreign_keys=OFF")
+           (try
+             (jdbc/atomic writer
+               (doseq [migration pending]
+                 (log/info "Applying migration" (str/replace (:file migration) #"\.sql$" ""))
+                 (doseq [statement @(:statements migration)]
+                   (jdbc/execute! writer statement)))
+               (when-let [violations (seq (jdbc/fetch writer "PRAGMA foreign_key_check"))]
+                 (throw (ex-info "Migration left broken foreign key references"
+                                 {:violations (vec violations)})))
+               (jdbc/execute! writer (str "PRAGMA user_version = " target)))
+             (finally
+               (jdbc/execute! writer "PRAGMA foreign_keys=ON")))))
        pending))))
 
 
