@@ -280,12 +280,13 @@
         due (list-due l done? next-due)
         total (reduce + (vals counts))]
     [:li {:id (str "list-row-" id)}
-     [:a {:href (str "/lists/" id)} [:span.icon (:list/icon l)] " " (:list/title l)]
-     " "
-     [:span.summary (str (closed-count counts) " of " total " done")]
-     (when done? [:span.badge.done "done"])
-     (due-el due (some-> due (< (:now v))) v)
-     [:progress {:max (str (max total 1)) :value (str (closed-count counts))}]]))
+     [:a {:href (str "/lists/" id)}
+      [:span.title [:span.icon (:list/icon l)] " " (:list/title l)]
+      " "
+      [:span.summary (str (closed-count counts) " of " total " done")]
+      (when done? [:span.badge.done "done"])
+      (due-el due (some-> due (< (:now v))) v)
+      [:progress {:max (str (max total 1)) :value (str (closed-count counts))}]]]))
 
 
 (defn- index-order

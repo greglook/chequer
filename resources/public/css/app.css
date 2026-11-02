@@ -1214,18 +1214,20 @@ ul.plans li:hover {
   box-shadow: var(--shadow);
 }
 
-ul.lists li {
+ul.lists li > a {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   column-gap: 0.75rem;
   row-gap: 0.15rem;
   padding: 0.85rem 1rem;
+  color: var(--text);
 }
 
-ul.lists li > a {
+ul.lists li .title {
   flex: 1 1 auto;
   min-width: 0;
+  font-weight: 550;
 }
 
 ul.lists li progress {
@@ -1233,15 +1235,11 @@ ul.lists li progress {
   margin-top: 0.5rem;
 }
 
-ul.lists li > a,
-ul.plans li > a {
-  color: var(--text);
-  font-weight: 550;
-}
-
 ul.plans li > a {
   display: block;
   padding: 0.85rem 1rem;
+  color: var(--text);
+  font-weight: 550;
 }
 
 ul.lists li > a:hover,
