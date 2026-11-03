@@ -412,12 +412,14 @@ button.danger:hover {
   color: var(--danger);
 }
 
-/* Square buttons showing a stroked icon instead of a label. */
+/* Square buttons and links showing a stroked icon instead of a label. */
+a.icon-button,
 button.icon-button {
   padding: 0;
   min-width: 2rem;
 }
 
+a.icon-button svg,
 button.icon-button svg {
   width: 1rem;
   height: 1rem;
@@ -462,6 +464,7 @@ p.actions {
     padding-inline: 0.8rem;
   }
 
+  a.icon-button,
   button.icon-button,
   details.menu.more > summary {
     min-width: 2.5rem;
@@ -859,6 +862,12 @@ progress::-moz-progress-bar {
 .list-header > .controls > :first-child:not(.primary),
 .plan-header > .controls > :first-child:not(.primary) {
   margin-left: -0.7rem;
+}
+
+/* Push the icon buttons to the right, after the labelled controls. */
+.list-header > .controls > :not(.icon-button) + .icon-button,
+.plan-header > .controls > :not(.icon-button) + .icon-button {
+  margin-left: auto;
 }
 
 ul.tasks,

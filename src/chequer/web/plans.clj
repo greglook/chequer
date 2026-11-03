@@ -7,8 +7,8 @@
     [chequer.markdown :as md]
     [chequer.web.common :as web
      :refer [action confirmed delete-icon-button delete-menu-item
-             edit-button edit-form edit-icon-button edit-toggle errors-el
-             field html html-response icon-field more-menu move-buttons mutate raw
+             edit-form edit-icon-button edit-toggle errors-el field history-icon-link
+             html html-response icon-field more-menu move-buttons mutate raw
              text-response toggle-signal]]
     [chequer.web.layout :as layout]))
 
@@ -112,9 +112,9 @@
        [:div.markdown (raw (md/render d))])
      [:div.controls
       [:a.button.primary {:href (str "/lists/new?plan=" id)} "Start a list from this plan"]
-      [:a {:href (str path "/history")} "History"]
-      (edit-button signal)
-      [:button.danger {:type "button" :data-on:click (confirmed "Delete this plan?" (str "@delete('" path "')"))} "Delete"]]
+      (edit-icon-button signal)
+      (history-icon-link path)
+      (delete-icon-button (confirmed "Delete this plan?" (str "@delete('" path "')")))]
      (edit-form signal path
                 (field "Title" "title" (:plan/title p) {:required true})
                 (icon-field (:plan/icon p))

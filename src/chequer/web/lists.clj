@@ -9,9 +9,10 @@
     [chequer.markdown :as md]
     [chequer.time :as time]
     [chequer.users :as users]
-    [chequer.web.common :as web :refer [action delete-icon-button delete-menu-item edit-button
-                                        edit-form edit-icon-button edit-toggle errors-el field html
-                                        html-response icon-field more-menu move-buttons mutate raw
+    [chequer.web.common :as web :refer [action delete-icon-button delete-menu-item edit-form
+                                        edit-icon-button edit-toggle errors-el field
+                                        history-icon-link html html-response icon-button
+                                        icon-field more-menu move-buttons mutate raw
                                         text-response toggle-signal]]
     [chequer.web.layout :as layout]
     [clojure.string :as str]
@@ -233,12 +234,12 @@
       (if (:mine? v)
         [:a.toggle.on {:href path} "Assigned to me"]
         [:a.toggle {:href (str path "?mine=1")} "Assigned to me"])
-      [:a {:href (str path "/history")} "History"]
-      (edit-button signal)
+      (edit-icon-button signal)
+      (history-icon-link path)
       (if archived?
-        [:button {:type "button" :data-on:click (str "@post('" path "/unarchive')")} "Unarchive"]
-        [:button {:type "button" :data-on:click (str "@post('" path "/archive')")} "Archive"])
-      [:button.danger {:type "button" :data-on:click (web/confirmed "Delete this list?" (str "@delete('" path "')"))} "Delete"]]
+        (icon-button web/unarchive-icon "Unarchive" (str "@post('" path "/unarchive')"))
+        (icon-button web/archive-icon "Archive" (str "@post('" path "/archive')")))
+      (delete-icon-button (web/confirmed "Delete this list?" (str "@delete('" path "')")))]
      (edit-form signal path
                 (field "Title" "title" (:list/title l) {:required true})
                 (icon-field (:list/icon l))

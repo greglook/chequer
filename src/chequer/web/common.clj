@@ -248,11 +248,6 @@
    [:button.primary {:type "button" :data-on:click (str (action "post" (str url "?edit=1")) "; el.form.reset()")} "Add"]])
 
 
-(defn edit-button
-  [signal]
-  [:button {:type "button" :data-on:click (str "$" signal " = !$" signal)} "Edit"])
-
-
 (def ^:private pencil-icon
   (raw (str "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
             "<path d=\"M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z\"/></svg>")))
@@ -269,8 +264,37 @@
             "<circle cx=\"12\" cy=\"19\" r=\"1.75\"/></svg>")))
 
 
+(def ^:private history-icon
+  (raw (str "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
+            "<path d=\"M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5M12 7v5l3 2\"/></svg>")))
+
+
+(def archive-icon
+  (raw (str "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
+            "<path d=\"M3 4h18v4H3zM5 8v12h14V8M10 12h4\"/></svg>")))
+
+
+(def unarchive-icon
+  (raw (str "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
+            "<path d=\"M3 4h18v4H3zM5 8v12h14V8M12 18v-6M9 15l3-3 3 3\"/></svg>")))
+
+
+(defn icon-button
+  "A button showing icon, with label as its hover text, running the Datastar expression click."
+  [icon label click]
+  [:button.icon-button {:type "button" :title label :aria-label label :data-on:click click}
+   icon])
+
+
+(defn history-icon-link
+  "A link to path's history page, showing a clock icon."
+  [path]
+  [:a.icon-button {:href (str path "/history") :title "History" :aria-label "History"}
+   history-icon])
+
+
 (defn edit-icon-button
-  "An edit-button showing a pencil icon."
+  "A button toggling signal, showing a pencil icon."
   [signal]
   [:button.icon-button {:type "button" :title "Edit" :aria-label "Edit"
                         :data-on:click (str "$" signal " = !$" signal)}
