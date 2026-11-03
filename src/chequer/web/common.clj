@@ -320,6 +320,13 @@
    (into [:div.menu-items] items)])
 
 
+(defn edit-menu-item
+  "A menu item toggling signal, which closes its menu."
+  [signal]
+  [:button {:type "button" :data-on:click (str "$" signal " = !$" signal "; el.closest('details').open = false")}
+   "Edit"])
+
+
 (defn delete-menu-item
   "A red menu item running a DELETE of path once question is confirmed."
   [question path]
@@ -406,7 +413,8 @@
   remember that in this browser. Only one list or plan is on a page, so every collapse
   signal is one of its sections."
   [owner]
-  (letfn [(set-all [collapsed]
+  (letfn [(set-all
+            [collapsed]
             (str "@setAll(" collapsed ", {include: /^_collapsed_/}); "
                  "chequerCollapse.setAll('" owner "', " collapsed ")"))]
     (list (icon-button collapse-all-icon "Collapse all sections" (set-all true))

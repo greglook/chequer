@@ -878,6 +878,69 @@ progress::-moz-progress-bar {
   margin-left: auto;
 }
 
+/* The edit, history, archive and delete buttons, which move into the triple-dot menu when
+   the row would wrap. The query widths are each row's measured width, at 16px text, with
+   a little to spare. */
+.list-header > .controls > .header-actions,
+.plan-header > .controls > .header-actions {
+  display: contents;
+}
+
+.list-header > .controls > details.more,
+.plan-header > .controls > details.more {
+  display: none;
+}
+
+.list-header > .controls {
+  container: list-controls / inline-size;
+}
+
+.plan-header > .controls {
+  container: plan-controls / inline-size;
+}
+
+@container list-controls (max-width: 27rem) {
+  .list-header > .controls > .header-actions {
+    display: none;
+  }
+
+  .list-header > .controls > details.more {
+    display: inline-block;
+  }
+}
+
+@container plan-controls (max-width: 24rem) {
+  .plan-header > .controls > .header-actions {
+    display: none;
+  }
+
+  .plan-header > .controls > details.more {
+    display: inline-block;
+  }
+}
+
+@media (pointer: coarse) {
+  @container list-controls (max-width: 30rem) {
+    .list-header > .controls > .header-actions {
+      display: none;
+    }
+
+    .list-header > .controls > details.more {
+      display: inline-block;
+    }
+  }
+
+  @container plan-controls (max-width: 26.5rem) {
+    .plan-header > .controls > .header-actions {
+      display: none;
+    }
+
+    .plan-header > .controls > details.more {
+      display: inline-block;
+    }
+  }
+}
+
 ul.tasks,
 ul.plan-tasks {
   list-style: none;

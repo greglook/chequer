@@ -258,12 +258,21 @@
         [:a.toggle.on {:href path} "Assigned to me"]
         [:a.toggle {:href (str path "?mine=1")} "Assigned to me"])
       (web/collapse-all-buttons (str "list-" id))
-      (edit-icon-button signal)
-      (history-icon-link path)
-      (if archived?
-        (icon-button web/unarchive-icon "Unarchive" (str "@post('" path "/unarchive')"))
-        (icon-button web/archive-icon "Archive" (str "@post('" path "/archive')")))
-      (delete-icon-button (web/confirmed "Delete this list?" (str "@delete('" path "')")))]
+      ;; Folded into the menu after them when they'd wrap, on narrow screens.
+      [:span.header-actions
+       (edit-icon-button signal)
+       (history-icon-link path)
+       (if archived?
+         (icon-button web/unarchive-icon "Unarchive" (str "@post('" path "/unarchive')"))
+         (icon-button web/archive-icon "Archive" (str "@post('" path "/archive')")))
+       (delete-icon-button (web/confirmed "Delete this list?" (str "@delete('" path "')")))]
+      (more-menu
+        (web/edit-menu-item signal)
+        [:a {:href (str path "/history")} "History"]
+        (if archived?
+          [:button {:type "button" :data-on:click (str "@post('" path "/unarchive')")} "Unarchive"]
+          [:button {:type "button" :data-on:click (str "@post('" path "/archive')")} "Archive"])
+        (delete-menu-item "Delete this list?" path))]
      (edit-form signal path
                 (field "Title" "title" (:list/title l) {:required true})
                 (icon-field (:list/icon l))

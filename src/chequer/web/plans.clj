@@ -113,9 +113,15 @@
      [:div.controls
       [:a.button.primary {:href (str "/lists/new?plan=" id)} "Start a list from this plan"]
       (web/collapse-all-buttons (str "plan-" id))
-      (edit-icon-button signal)
-      (history-icon-link path)
-      (delete-icon-button (confirmed "Delete this plan?" (str "@delete('" path "')")))]
+      ;; Folded into the menu after them when they'd wrap, on narrow screens.
+      [:span.header-actions
+       (edit-icon-button signal)
+       (history-icon-link path)
+       (delete-icon-button (confirmed "Delete this plan?" (str "@delete('" path "')")))]
+      (more-menu
+        (web/edit-menu-item signal)
+        [:a {:href (str path "/history")} "History"]
+        (delete-menu-item "Delete this plan?" path))]
      (edit-form signal path
                 (field "Title" "title" (:plan/title p) {:required true})
                 (icon-field (:plan/icon p))

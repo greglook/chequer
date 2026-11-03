@@ -119,6 +119,8 @@
               "a section starts collapsed or not by what the browser stored for its list")
           (is (str/includes? body (str "chequerCollapse.setAll(&#39;list-" lid "&#39;, true)"))
               "the header collapses all sections")
+          (is (str/includes? body "class=\"header-actions\"") "the header's icon buttons fold into a menu when narrow")
+          (is (str/includes? body "el.closest(&#39;details&#39;).open = false") "the menu's edit item closes the menu")
           (is (str/includes? body "0 of 3 done"))
           (is (< (str/index-of body "Passport") (str/index-of body "Clothes")) "unsectioned tasks come first"))
         (is (= 404 (:status (request h :get "/lists/999"))))))))
