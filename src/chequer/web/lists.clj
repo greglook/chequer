@@ -74,6 +74,13 @@
    :skipped "Skip"})
 
 
+(def ^:private state-icons
+  {:pending (raw (str "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
+                      "<path d=\"M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3\"/></svg>"))
+   :skipped (raw (str "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
+                      "<path d=\"M5 5l10 7-10 7zM19 5v14\"/></svg>"))})
+
+
 (defn- state-url
   [task-id state]
   (str "/tasks/" task-id "/state?to=" (name state)))
@@ -121,8 +128,8 @@
        (more-menu
          (for [s [:skipped :pending]
                :when (not= s state)]
-           [:button {:type "button" :data-on:click (str "@post('" (state-url id s) "')")} (state-actions s)])
-         [:a {:href (str path "/history")} "History"]
+           (web/menu-button (state-icons s) (state-actions s) (str "@post('" (state-url id s) "')")))
+         (web/history-menu-item path)
          (delete-menu-item "Delete this task?" path))]]
      (web/expanded-card el-id signal
                         [["State" (name state)]
@@ -268,10 +275,10 @@
        (delete-icon-button (web/confirmed "Delete this list?" (str "@delete('" path "')")))]
       (more-menu
         (web/edit-menu-item signal)
-        [:a {:href (str path "/history")} "History"]
+        (web/history-menu-item path)
         (if archived?
-          [:button {:type "button" :data-on:click (str "@post('" path "/unarchive')")} "Unarchive"]
-          [:button {:type "button" :data-on:click (str "@post('" path "/archive')")} "Archive"])
+          (web/menu-button web/unarchive-icon "Unarchive" (str "@post('" path "/unarchive')"))
+          (web/menu-button web/archive-icon "Archive" (str "@post('" path "/archive')")))
         (delete-menu-item "Delete this list?" path))]
      (edit-form signal path
                 (field "Title" "title" (:list/title l) {:required true})

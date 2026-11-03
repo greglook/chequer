@@ -320,17 +320,30 @@
    (into [:div.menu-items] items)])
 
 
+(defn menu-button
+  "A menu item showing icon before label, running the Datastar expression click, with extra
+  attrs."
+  ([icon label click] (menu-button icon label click {}))
+  ([icon label click attrs]
+   [:button (merge {:type "button" :data-on:click click} attrs) icon label]))
+
+
 (defn edit-menu-item
   "A menu item toggling signal, which closes its menu."
   [signal]
-  [:button {:type "button" :data-on:click (str "$" signal " = !$" signal "; el.closest('details').open = false")}
-   "Edit"])
+  (menu-button pencil-icon "Edit" (str "$" signal " = !$" signal "; el.closest('details').open = false")))
+
+
+(defn history-menu-item
+  "A menu item linking to path's history page."
+  [path]
+  [:a {:href (str path "/history")} history-icon "History"])
 
 
 (defn delete-menu-item
   "A red menu item running a DELETE of path once question is confirmed."
   [question path]
-  [:button.danger {:type "button" :data-on:click (confirmed question (str "@delete('" path "')"))} "Delete"])
+  (menu-button trash-icon "Delete" (confirmed question (str "@delete('" path "')")) {:class "danger"}))
 
 
 (defn escape-expr

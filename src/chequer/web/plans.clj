@@ -120,7 +120,7 @@
        (delete-icon-button (confirmed "Delete this plan?" (str "@delete('" path "')")))]
       (more-menu
         (web/edit-menu-item signal)
-        [:a {:href (str path "/history")} "History"]
+        (web/history-menu-item path)
         (delete-menu-item "Delete this plan?" path))]
      (edit-form signal path
                 (field "Title" "title" (:plan/title p) {:required true})
