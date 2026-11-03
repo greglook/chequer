@@ -66,7 +66,8 @@
       (let [r (request h :get "/plans")]
         (is (= 200 (:status r)))
         (is (str/includes? (:body r) "Packing"))
-        (is (str/includes? (:body r) "href=\"/plans/new\"")))
+        (is (str/includes? (:body r) "href=\"/plans/new\""))
+        (is (str/includes? (:body r) "chequerCollapse.prune()") "forgets long-unopened collapsed sections"))
       (let [r (request h :get "/plans/new")]
         (is (= 200 (:status r)))
         (is (str/includes? (:body r) "action=\"/plans\""))))))
@@ -124,7 +125,7 @@
           (is (str/includes? body (str "id=\"plan-" pid "\"")))
           (is (str/includes? body (str "id=\"plan-section-" g "-header\"")))
           (is (str/includes? body "Socks"))
-          (is (str/includes? body (str "localStorage.getItem(&#39;chequer:collapsed:plan-section-" g "&#39;)"))
+          (is (str/includes? body (str "chequerCollapse.isCollapsed(&#39;plan-" pid "&#39;, &#39;plan-section-" g "&#39;)"))
               "a section starts collapsed or not by what the browser stored")
           (is (str/includes? body "class=\"section-toggle\"") "the section's title collapses it")
           (is (< (str/index-of body "Passport") (str/index-of body "Clothes")) "unsectioned tasks come first"))

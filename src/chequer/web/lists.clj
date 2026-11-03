@@ -147,13 +147,13 @@
   "#list-section-<id>-header: the section's title and controls. Collapsed, it counts the
   section's closed tasks of its counts out of task-count. Deleting confirms with the number of
   tasks, from data-task-count, that go with it."
-  [section counts task-count]
+  [list-id section counts task-count]
   (let [id (:list.section/id section)
         path (str "/list-sections/" id)
         signal (toggle-signal "Section" id)]
     [:header (merge {:id (str "list-section-" id "-header")} (edit-toggle signal))
      [:h2
-      (web/collapse-toggle (str "list-section-" id) (:list.section/icon section) (:list.section/title section)
+      (web/collapse-toggle (str "list-" list-id) (str "list-section-" id) (:list.section/icon section) (:list.section/title section)
                            (str (closed-count counts) "/" task-count))
       [:span.controls
        (edit-icon-button signal)
@@ -194,7 +194,7 @@
   changes touch, is touched."
   [{:chequer/keys [db live]} list-id section task-count]
   @(live/cell live [:list list-id :header])
-  (render-section-header section (lists/load-section-counts db (:list.section/id section)) task-count))
+  (render-section-header list-id section (lists/load-section-counts db (:list.section/id section)) task-count))
 
 
 (defn- render-section
@@ -202,7 +202,7 @@
   parts inside it, the header and each task, patchable on their own."
   [src list-id {:keys [section task-ids]} v]
   (let [id (:list.section/id section)]
-    [:section.list-section (web/collapsible (str "list-section-" id))
+    [:section.list-section (web/collapsible (str "list-" list-id) (str "list-section-" id))
      [section-header-view src list-id section (count task-ids)]
      (task-list src list-id id task-ids v)
      [new-task-form list-id id]]))
@@ -403,7 +403,8 @@
                                    (if archived?
                                      [:a {:href "/"} "Show active"]
                                      [:a {:href "/lists?archived=1"} "Show archived"])]
-                                  [:div#live web/live-attrs fragment])))))
+                                  [:div#live web/live-attrs fragment]
+                                  web/prune-collapsed)))))
 
 
 (defn new-page

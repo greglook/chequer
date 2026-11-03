@@ -59,13 +59,13 @@
 (defn- render-section-header
   "#plan-section-<id>-header: the section's title, which collapses it, its controls and an
   inline edit form."
-  [section task-count]
+  [plan-id section task-count]
   (let [id (:plan.section/id section)
         path (str "/plan-sections/" id)
         signal (toggle-signal "Section" id)]
     [:header (merge {:id (str "plan-section-" id "-header")} (edit-toggle signal))
      [:h2
-      (web/collapse-toggle (str "plan-section-" id) (:plan.section/icon section) (:plan.section/title section) task-count)
+      (web/collapse-toggle (str "plan-" plan-id) (str "plan-section-" id) (:plan.section/icon section) (:plan.section/title section) task-count)
       [:span.controls
        (edit-icon-button signal)
        (move-buttons path)
@@ -94,8 +94,8 @@
   parts inside it, the header and each task, patchable on their own."
   [src plan-id {:keys [section task-ids]}]
   (let [id (:plan.section/id section)]
-    [:section.plan-section (web/collapsible (str "plan-section-" id))
-     [render-section-header section (count task-ids)]
+    [:section.plan-section (web/collapsible (str "plan-" plan-id) (str "plan-section-" id))
+     [render-section-header plan-id section (count task-ids)]
      (task-list src plan-id id task-ids)
      [new-task-form plan-id id]]))
 
@@ -169,7 +169,8 @@
                                  (for [p ps]
                                    [:li [:a {:href (str "/plans/" (:plan/id p))}
                                          [:span.icon (:plan/icon p)] " " (:plan/title p)]])]
-                                [:p.empty "No plans yet."]))))
+                                [:p.empty "No plans yet."])
+                              web/prune-collapsed)))
 
 
 (defn new-page

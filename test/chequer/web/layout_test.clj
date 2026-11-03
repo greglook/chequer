@@ -39,6 +39,7 @@
     (is (str/starts-with? html "<!DOCTYPE html>"))
     (is (str/includes? html "<title>Lists - Chequer</title>"))
     (is (str/includes? html "/js/datastar.js"))
+    (is (str/includes? html "/js/collapse.js"))
     (is (str/includes? html "/css/app.css"))
     (is (str/includes? html "<main><h1>Hello</h1></main>"))
     (is (str/includes? html "<a href=\"/\" aria-current=\"page\">Lists</a>"))
