@@ -326,13 +326,24 @@
   [:button.danger {:type "button" :data-on:click (confirmed question (str "@delete('" path "')"))} "Delete"])
 
 
+(defn- escape-expr
+  "A keydown expression that runs handler on an Escape that nothing else, like the icon
+  picker or a drag, has handled (by preventing its default), while condition holds."
+  [condition handler]
+  (str "evt.key === 'Escape' && !evt.defaultPrevented && " condition " && (" handler ")"))
+
+
 (defn edit-form
-  "An inline edit form, shown while signal is true, that PUTs its fields to path. Setting
-  _focusEdit to signal, as create-task-response does, focuses its title field once."
+  "An inline edit form, shown while signal is true, that PUTs its fields to path, or closes
+  unsaved on Escape. Setting _focusEdit to signal, as create-task-response does, focuses its
+  title field once."
   [signal path & body]
   (into [:form.edit {:data-signals__ifmissing "{_focusEdit: ''}"
                      :data-show (str "$" signal) :style "display: none"
                      :data-on:submit (str (action "put" path) "; $" signal " = false")
+                     ;; Prevented, so the expanded task beneath it stays open (see expandable).
+                     :data-on:keydown__window (escape-expr (str "$" signal)
+                                                           (str "$" signal " = false; evt.preventDefault()"))
                      ;; After a frame, so that data-show has shown the form.
                      :data-effect (str "$_focusEdit === '" signal "' && ($_focusEdit = '', "
                                        "requestAnimationFrame(() => el.elements.title?.focus()))")}]
@@ -401,11 +412,13 @@
 
 (defn expandable
   "The attributes of a task's root element, element-id: declares its edit-signal and the
-  shared _expandedTask signal, holding the id of the one expanded task, and adds the
-  expanded class while it's that task."
+  shared _expandedTask signal, holding the id of the one expanded task, adds the expanded
+  class while it's that task, and collapses it on Escape."
   [element-id edit-signal]
   {:data-signals__ifmissing (str "{_expandedTask: '', " edit-signal ": false}")
-   :data-class:expanded (expanded-expr element-id edit-signal)})
+   :data-class:expanded (expanded-expr element-id edit-signal)
+   :data-on:keydown__window (escape-expr (expanded-expr element-id edit-signal)
+                                         "$_expandedTask = ''")})
 
 
 (defn expand-row-attrs

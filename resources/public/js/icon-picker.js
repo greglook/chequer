@@ -84,6 +84,8 @@
   document.addEventListener('keydown', function (e) {
     if (!input) return;
     if (e.key === 'Escape') {
+      // so that the edit form the input is in stays open
+      e.preventDefault();
       close(true);
     } else if (e.key === 'Enter' && e.target === search()) {
       e.preventDefault();

@@ -173,7 +173,7 @@
   document.addEventListener('pointerup', function () { if (drag) end(true); });
   document.addEventListener('pointercancel', function () { if (drag) end(false); });
   document.addEventListener('keydown', function (e) {
-    if (drag && e.key === 'Escape') { end(false); return; }
+    if (drag && e.key === 'Escape') { e.preventDefault(); end(false); return; }
     var grip = e.target.closest && e.target.closest('.grip');
     var item = grip && grip.closest('[data-task-list] > [data-task-id]');
     if (!item || drag || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
