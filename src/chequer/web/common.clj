@@ -369,7 +369,8 @@
   state that the server never sees."
   [owner element-id]
   (let [signal (collapse-signal element-id)]
-    {:data-signals__ifmissing (str "{" signal ": chequerCollapse.isCollapsed('" owner "', '" element-id "')}")
+    {:data-collapse-owner owner
+     :data-signals__ifmissing (str "{" signal ": chequerCollapse.isCollapsed('" owner "', '" element-id "')}")
      :data-class:collapsed (str "$" signal)}))
 
 
@@ -388,6 +389,28 @@
      [:span.icon icon]
      [:span.title title]
      [:span.count {:data-show signal :style "display: none"} (str "(" task-count ")")]]))
+
+
+(def ^:private collapse-all-icon
+  (raw (str "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
+            "<path d=\"M7 4l5 5 5-5M7 20l5-5 5 5\"/></svg>")))
+
+
+(def ^:private expand-all-icon
+  (raw (str "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">"
+            "<path d=\"M7 9l5-5 5 5M7 15l5 5 5-5\"/></svg>")))
+
+
+(defn collapse-all-buttons
+  "Icon buttons, for the header of owner, that collapse or expand all of its sections and
+  remember that in this browser. Only one list or plan is on a page, so every collapse
+  signal is one of its sections."
+  [owner]
+  (letfn [(set-all [collapsed]
+            (str "@setAll(" collapsed ", {include: /^_collapsed_/}); "
+                 "chequerCollapse.setAll('" owner "', " collapsed ")"))]
+    (list (icon-button collapse-all-icon "Collapse all sections" (set-all true))
+          (icon-button expand-all-icon "Expand all sections" (set-all false)))))
 
 
 (def prune-collapsed

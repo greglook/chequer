@@ -117,6 +117,8 @@
           (is (str/includes? body "(0/2)") "the collapsed section counts its closed tasks")
           (is (str/includes? body (str "chequerCollapse.isCollapsed(&#39;list-" lid "&#39;, &#39;list-section-" g "&#39;)"))
               "a section starts collapsed or not by what the browser stored for its list")
+          (is (str/includes? body (str "chequerCollapse.setAll(&#39;list-" lid "&#39;, true)"))
+              "the header collapses all sections")
           (is (str/includes? body "0 of 3 done"))
           (is (< (str/index-of body "Passport") (str/index-of body "Clothes")) "unsectioned tasks come first"))
         (is (= 404 (:status (request h :get "/lists/999"))))))))

@@ -47,6 +47,16 @@ var chequerCollapse = (function () {
     write(owner, sections);
   }
 
+  // Collapse or expand every section of owner on the page, those marked data-collapse-owner.
+  function setAll(owner, collapsed) {
+    var sections = [];
+    if (collapsed) {
+      var els = document.querySelectorAll('[data-collapse-owner="' + owner + '"]');
+      for (var i = 0; i < els.length; i++) sections.push(els[i].id);
+    }
+    write(owner, sections);
+  }
+
   // Remove the entries of lists and plans not opened in 30 days, and any that don't parse,
   // such as the per-section keys of earlier versions.
   function prune() {
@@ -62,5 +72,5 @@ var chequerCollapse = (function () {
     } catch (e) {}
   }
 
-  return {isCollapsed: isCollapsed, set: set, prune: prune};
+  return {isCollapsed: isCollapsed, set: set, setAll: setAll, prune: prune};
 })();

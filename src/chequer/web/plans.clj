@@ -112,6 +112,7 @@
        [:div.markdown (raw (md/render d))])
      [:div.controls
       [:a.button.primary {:href (str "/lists/new?plan=" id)} "Start a list from this plan"]
+      (web/collapse-all-buttons (str "plan-" id))
       (edit-icon-button signal)
       (history-icon-link path)
       (delete-icon-button (confirmed "Delete this plan?" (str "@delete('" path "')")))]

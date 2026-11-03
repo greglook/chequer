@@ -257,6 +257,7 @@
       (if (:mine? v)
         [:a.toggle.on {:href path} "Assigned to me"]
         [:a.toggle {:href (str path "?mine=1")} "Assigned to me"])
+      (web/collapse-all-buttons (str "list-" id))
       (edit-icon-button signal)
       (history-icon-link path)
       (if archived?

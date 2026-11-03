@@ -127,6 +127,8 @@
           (is (str/includes? body "Socks"))
           (is (str/includes? body (str "chequerCollapse.isCollapsed(&#39;plan-" pid "&#39;, &#39;plan-section-" g "&#39;)"))
               "a section starts collapsed or not by what the browser stored")
+          (is (str/includes? body (str "chequerCollapse.setAll(&#39;plan-" pid "&#39;, true)"))
+              "the header collapses all sections")
           (is (str/includes? body "class=\"section-toggle\"") "the section's title collapses it")
           (is (< (str/index-of body "Passport") (str/index-of body "Clothes")) "unsectioned tasks come first"))
         (is (= 404 (:status (request h :get "/plans/999"))))))))
