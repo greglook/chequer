@@ -375,18 +375,6 @@
        :sections (mapv (fn [g] {:section g :task-ids (get task-ids (:list.section/id g) [])}) sections)})))
 
 
-(defn load-list
-  "{:list l :unsectioned [tasks] :sections [{:section g :tasks [...]}]} in display order, or nil."
-  [db id]
-  (when-let [l (db/q1 db ["SELECT * FROM list WHERE id = ?" id])]
-    (let [sections (map row->section (db/q db ["SELECT * FROM list_section WHERE list_id = ? ORDER BY rank, id" id]))
-          tasks (group-by :task/section
-                          (map row->task (db/q db ["SELECT * FROM task WHERE list_id = ? ORDER BY rank, id" id])))]
-      {:list (row->list l)
-       :unsectioned (vec (get tasks nil))
-       :sections (mapv (fn [g] {:section g :tasks (vec (get tasks (:list.section/id g)))}) sections)})))
-
-
 (defn list-summary
   "Every list, active and archived, as {:list l :counts {state n} :done? bool :next-due instant},
   where next-due is the earliest due-at among its open tasks."

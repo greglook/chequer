@@ -55,18 +55,6 @@
       {:value decoded})))
 
 
-(defn validate-title
-  "{:value cleaned-title} or {:error message}."
-  [s]
-  (validate Title s))
-
-
-(defn validate-icon
-  "{:value cleaned-icon-or-nil} or {:error message}."
-  [s]
-  (validate Icon s))
-
-
 (defn clean
   "Validate the keys of attrs that have a schema in schemas. Returns the cleaned map of those
   keys, or throws ex-info {:type :chequer/invalid :errors {k message}}."
@@ -382,15 +370,3 @@
                                 #(mapv :id %))]
       {:unsectioned (get task-ids nil [])
        :sections (mapv (fn [g] {:section g :task-ids (get task-ids (:plan.section/id g) [])}) sections)})))
-
-
-(defn load-plan
-  "{:plan p :unsectioned [tasks] :sections [{:section g :tasks [...]}]} in display order, or nil."
-  [db id]
-  (when-let [p (db/q1 db ["SELECT * FROM plan WHERE id = ?" id])]
-    (let [sections (map row->section (db/q db ["SELECT * FROM plan_section WHERE plan_id = ? ORDER BY rank, id" id]))
-          tasks (group-by :plan.task/section
-                          (map row->task (db/q db ["SELECT * FROM plan_task WHERE plan_id = ? ORDER BY rank, id" id])))]
-      {:plan (row->plan p)
-       :unsectioned (vec (get tasks nil))
-       :sections (mapv (fn [g] {:section g :tasks (vec (get tasks (:plan.section/id g)))}) sections)})))

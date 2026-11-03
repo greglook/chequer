@@ -69,4 +69,4 @@
 (deftest every-bundled-emoji-is-a-valid-icon
   (let [entries (emoji/parse (slurp (io/resource "chequer/emoji.txt")))]
     (is (< 1500 (count entries)))
-    (is (= [] (remove #(= {:value (:emoji %)} (plans/validate-icon (:emoji %))) entries)))))
+    (is (= [] (remove #(= {:value (:emoji %)} (#'plans/validate plans/Icon (:emoji %))) entries)))))

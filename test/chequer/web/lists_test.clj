@@ -410,7 +410,7 @@
 (defn- shape
   "The list's display order as [unsectioned-titles [section-title task-titles]...]."
   [{:keys [db]} lid]
-  (let [{:keys [unsectioned sections]} (lists/load-list db lid)]
+  (let [{:keys [unsectioned sections]} (helpers/load-list db lid)]
     [(mapv :task/title unsectioned)
      (mapv (fn [{:keys [section tasks]}] [(:list.section/title section) (mapv :task/title tasks)]) sections)]))
 

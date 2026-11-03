@@ -1,5 +1,7 @@
 (ns chequer.test-helpers
   (:require
+    [chequer.data.lists :as lists]
+    [chequer.data.plans :as plans]
     [chequer.db :as db]
     [chequer.users :as users]
     [clojure.string :as str]
@@ -43,3 +45,28 @@
   "Create a user named user-name and return its row."
   [d user-name]
   (users/ensure-user! d {:subject user-name :name user-name :title user-name}))
+
+
+(defn- load-nested
+  "Join header (the map under k) and structure into {k h :unsectioned [tasks] :sections
+  [{:section g :tasks [...]}]}, loading each task with load-task, or nil."
+  [db k header structure load-task]
+  (when header
+    (let [{:keys [unsectioned sections]} structure
+          load-tasks #(mapv (partial load-task db) %)]
+      {k header
+       :unsectioned (load-tasks unsectioned)
+       :sections (mapv (fn [{:keys [section task-ids]}] {:section section :tasks (load-tasks task-ids)})
+                       sections)})))
+
+
+(defn load-list
+  "{:list l :unsectioned [tasks] :sections [{:section g :tasks [...]}]} in display order, or nil."
+  [db id]
+  (load-nested db :list (:list (lists/load-list-header db id)) (lists/load-list-structure db id) lists/load-task))
+
+
+(defn load-plan
+  "{:plan p :unsectioned [tasks] :sections [{:section g :tasks [...]}]} in display order, or nil."
+  [db id]
+  (load-nested db :plan (plans/load-plan-header db id) (plans/load-plan-structure db id) plans/load-plan-task))

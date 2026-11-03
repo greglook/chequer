@@ -5,8 +5,8 @@
   everything written so far is decodable as soon as it arrives, and the encoder keeps its
   window between chunks, so a chunk repeating an earlier one costs a few octets.
 
-  Without libbrotlienc, `available?` is false and `encoder` returns nil, which callers
-  read as \"send it uncompressed\"."
+  Without libbrotlienc, `encoder` returns nil, which callers read as \"send it
+  uncompressed\"."
   (:require
     [clojure.core.async :as async]
     [clojure.string :as str]
@@ -45,12 +45,6 @@
         (some (fn [path]
                 (try (ffi/load-library path) (bind) (catch Throwable _ nil)))
               ["libbrotlienc.so.1" "libbrotlienc.so" "libbrotlienc.1.dylib" "libbrotlienc.dylib"]))))
-
-
-(defn available?
-  "True when libbrotlienc could be bound."
-  []
-  (some? @native))
 
 
 (defn acceptable?

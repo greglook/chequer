@@ -1,13 +1,13 @@
 (ns chequer.repl
   (:require
+    [chequer.config :as config]
+    [chequer.core :as core]
     [clojure.java.io :as io]
     [clojure.repl :refer :all]
     [clojure.string :as str]
     [malli.core :as m]
     [malli.error :as me]
     [next.jdbc :as jdbc]
-    [chequer.config :as config]
-    [chequer.core :as core]
     [tick.core :as t])
   (:import
     (java.time

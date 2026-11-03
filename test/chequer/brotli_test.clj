@@ -68,16 +68,16 @@
 
 
 (deftest each-chunk-decodes-on-arrival
-  (is (brotli/available?))
-  (let [e (brotli/encoder)
-        decode (decoder)
-        frame "event: datastar-patch-elements\ndata: elements <ul><li>a task</li></ul>\n\n"
-        first-chunk (brotli/compress-chunk! e (.getBytes frame "UTF-8"))
-        second-chunk (brotli/compress-chunk! e (.getBytes frame "UTF-8"))]
-    (is (= [frame false] (decode first-chunk)))
-    (is (= [frame false] (decode second-chunk)))
-    (is (< (alength second-chunk) (alength first-chunk)) "a repeat costs less than the original")
-    (is (= ["" true] (decode (brotli/finish! e))))))
+  (let [e (brotli/encoder)]
+    (is (some? e) "libbrotlienc is available")
+    (let [decode (decoder)
+          frame "event: datastar-patch-elements\ndata: elements <ul><li>a task</li></ul>\n\n"
+          first-chunk (brotli/compress-chunk! e (.getBytes frame "UTF-8"))
+          second-chunk (brotli/compress-chunk! e (.getBytes frame "UTF-8"))]
+      (is (= [frame false] (decode first-chunk)))
+      (is (= [frame false] (decode second-chunk)))
+      (is (< (alength second-chunk) (alength first-chunk)) "a repeat costs less than the original")
+      (is (= ["" true] (decode (brotli/finish! e)))))))
 
 
 (deftest compress-channel-streams-src

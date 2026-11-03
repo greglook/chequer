@@ -109,15 +109,15 @@
         (is (= {:list/id lid :list/title "Trip" :list/description nil :list/icon "🧳" :list/due-at 5000
                 :list/archived-at nil :list/created-at 1000 :list/created-by (:id u)
                 :list/updated-at 1000 :list/updated-by (:id u)}
-               (:list (lists/load-list d lid))))
+               (:list (helpers/load-list d lid))))
         (binding [time/*now-ms* (constantly 2000)]
           (is (= #{[:list lid] [:list lid :header] [:lists]} (:topics (tx! d #(lists/update-list! % u {:id lid :title "Trip!" :due_at nil}))))))
         (is (= {:list/title "Trip!" :list/due-at nil :list/updated-at 2000}
-               (select-keys (:list (lists/load-list d lid)) [:list/title :list/due-at :list/updated-at])))
+               (select-keys (:list (helpers/load-list d lid)) [:list/title :list/due-at :list/updated-at])))
         (testing "an update that changes nothing writes no event and no topics"
           (is (= #{} (:topics (tx! d #(lists/update-list! % u {:id lid :title "Trip!"}))))))
         (tx! d #(lists/delete-list! % u {:id lid}))
-        (is (nil? (lists/load-list d lid)))
+        (is (nil? (helpers/load-list d lid)))
         (is (= [{:entity_type "list" :entity_id lid :list_id lid :action "create" :data {:title "Trip"}}
                 {:entity_type "list" :entity_id lid :list_id lid :action "update"
                  :data {:title ["Trip" "Trip!"] :due_at [5000 nil]}}
@@ -139,7 +139,7 @@
   (with-user
     (fn [d u]
       (let [{:keys [lid]} (seed d u)
-            archived-at #(:list/archived-at (:list (lists/load-list d lid)))]
+            archived-at #(:list/archived-at (:list (helpers/load-list d lid)))]
         (is (= #{[:list lid] [:list lid :header] [:lists]} (:topics (tx! d #(lists/archive-list! % u {:id lid})))))
         (is (= 1000 (archived-at)))
         (testing "archiving twice keeps the first instant and writes nothing"
@@ -163,7 +163,7 @@
   (with-user
     (fn [d u]
       (let [{:keys [lid a]} (seed d u)
-            loaded (lists/load-list d lid)]
+            loaded (helpers/load-list d lid)]
         (is (= [["c"] [["G1" ["a" "b"]]]] (shape loaded)))
         (is (= {:task/id a :task/list lid :task/state :pending}
                (select-keys (first (:tasks (first (:sections loaded)))) [:task/id :task/list :task/state])))))))
@@ -179,12 +179,12 @@
         (is (= #{[:list lid] [:list lid :structure]} (:topics (tx! d #(lists/move-section! % u {:id g2 :direction :up})))))
         (is (= #{[:list lid] [:list lid :structure]} (:topics (tx! d #(lists/place-task! % u {:id b :section-id g1 :before a})))))
         (tx! d #(lists/place-task! % u {:id d2 :section-id g2 :before nil}))
-        (is (= [["c"] [["G2" ["d"]] ["G1" ["b" "a"]]]] (shape (lists/load-list d lid))))
+        (is (= [["c"] [["G2" ["d"]] ["G1" ["b" "a"]]]] (shape (helpers/load-list d lid))))
         (is (= g1 (:section_id (db/q1 d ["SELECT section_id FROM task WHERE id = ?" b]))))
         (tx! d #(lists/place-task! % u {:id a :section-id g2 :before d2}))
         (tx! d #(lists/place-task! % u {:id c :section-id g1 :before nil}))
         (tx! d #(lists/place-task! % u {:id b :section-id nil :before nil}))
-        (is (= [["b"] [["G2" ["a" "d"]] ["G1" ["c"]]]] (shape (lists/load-list d lid)))
+        (is (= [["b"] [["G2" ["a" "d"]] ["G1" ["c"]]]] (shape (helpers/load-list d lid)))
             "placing a task in another section, or none, moves it there")
         (is (= before (count (events d))) "reordering records no events")))))
 
@@ -210,7 +210,7 @@
       (let [{:keys [lid g1 a b]} (seed d u)
             before (count (events d))]
         (is (= #{[:list lid] [:list lid :header] [:list lid :structure]} (:topics (tx! d #(lists/delete-section! % u {:id g1})))))
-        (is (= [["c"] []] (shape (lists/load-list d lid))))
+        (is (= [["c"] []] (shape (helpers/load-list d lid))))
         (is (= [{:entity_type "task" :entity_id a :list_id lid :action "delete" :data {:title "a"}}
                 {:entity_type "task" :entity_id b :list_id lid :action "delete" :data {:title "b"}}
                 {:entity_type "list.section" :entity_id g1 :list_id lid :action "delete" :data {:title "G1"}}]

@@ -31,21 +31,21 @@
 
 
 (deftest validators-clean-or-explain
-  (is (= {:value "Packing"} (plans/validate-title "  Packing ")))
-  (is (= {:error "can't be blank"} (plans/validate-title "   ")))
-  (is (= {:error "can't be blank"} (plans/validate-title nil)))
-  (is (= {:error "must be a single line"} (plans/validate-title "a\nb")))
-  (is (= {:value (apply str (repeat 200 "x"))} (plans/validate-title (apply str (repeat 200 "x")))))
-  (is (= {:error "must be at most 200 characters"} (plans/validate-title (apply str (repeat 201 "x")))))
-  (is (= {:value nil} (plans/validate-icon " ")))
-  (is (= {:value "🧳"} (plans/validate-icon "🧳")))
-  (is (= {:value "👍🏽"} (plans/validate-icon "👍🏽")) "a modified emoji is several code points")
-  (is (= {:value "👨‍👩‍👧‍👦"} (plans/validate-icon "👨‍👩‍👧‍👦")) "a family ZWJ sequence is 7 code points")
-  (is (contains? (plans/validate-icon "a") :error))
-  (is (contains? (plans/validate-icon "🧳1") :error))
-  (is (= {:value "7️⃣"} (plans/validate-icon "7️⃣")) "a digit is allowed in a keycap")
-  (is (contains? (plans/validate-icon "7") :error))
-  (is (contains? (plans/validate-icon "🧳🧳🧳🧳🧳🧳🧳🧳🧳") :error) "9 code points is too many"))
+  (is (= {:value "Packing"} (#'plans/validate plans/Title "  Packing ")))
+  (is (= {:error "can't be blank"} (#'plans/validate plans/Title "   ")))
+  (is (= {:error "can't be blank"} (#'plans/validate plans/Title nil)))
+  (is (= {:error "must be a single line"} (#'plans/validate plans/Title "a\nb")))
+  (is (= {:value (apply str (repeat 200 "x"))} (#'plans/validate plans/Title (apply str (repeat 200 "x")))))
+  (is (= {:error "must be at most 200 characters"} (#'plans/validate plans/Title (apply str (repeat 201 "x")))))
+  (is (= {:value nil} (#'plans/validate plans/Icon " ")))
+  (is (= {:value "🧳"} (#'plans/validate plans/Icon "🧳")))
+  (is (= {:value "👍🏽"} (#'plans/validate plans/Icon "👍🏽")) "a modified emoji is several code points")
+  (is (= {:value "👨‍👩‍👧‍👦"} (#'plans/validate plans/Icon "👨‍👩‍👧‍👦")) "a family ZWJ sequence is 7 code points")
+  (is (contains? (#'plans/validate plans/Icon "a") :error))
+  (is (contains? (#'plans/validate plans/Icon "🧳1") :error))
+  (is (= {:value "7️⃣"} (#'plans/validate plans/Icon "7️⃣")) "a digit is allowed in a keycap")
+  (is (contains? (#'plans/validate plans/Icon "7") :error))
+  (is (contains? (#'plans/validate plans/Icon "🧳🧳🧳🧳🧳🧳🧳🧳🧳") :error) "9 code points is too many"))
 
 
 (deftest create-update-delete-plan-write-events
@@ -55,15 +55,15 @@
         (is (= #{[:plan pid] [:plan pid :header] [:plan pid :structure] [:plans]} topics))
         (is (= {:plan/id pid :plan/title "Packing" :plan/description nil :plan/icon "🧳"
                 :plan/created-at 1000 :plan/created-by (:id u) :plan/updated-at 1000 :plan/updated-by (:id u)}
-               (:plan (plans/load-plan d pid))))
+               (:plan (helpers/load-plan d pid))))
         (binding [time/*now-ms* (constantly 2000)]
           (tx! d #(plans/update-plan! % u {:id pid :title "Packing list" :description "Bring *all*" :icon "🧳"})))
         (is (= {:plan/title "Packing list" :plan/description "Bring *all*" :plan/updated-at 2000}
-               (select-keys (:plan (plans/load-plan d pid)) [:plan/title :plan/description :plan/updated-at])))
+               (select-keys (:plan (helpers/load-plan d pid)) [:plan/title :plan/description :plan/updated-at])))
         (testing "an update that changes nothing writes no event"
           (tx! d #(plans/update-plan! % u {:id pid :title "Packing list"})))
         (tx! d #(plans/delete-plan! % u {:id pid}))
-        (is (nil? (plans/load-plan d pid)))
+        (is (nil? (helpers/load-plan d pid)))
         (is (= [{:entity_type "plan" :entity_id pid :plan_id pid :action "create" :data {:title "Packing"}}
                 {:entity_type "plan" :entity_id pid :plan_id pid :action "update"
                  :data {:title ["Packing" "Packing list"] :description [nil "Bring *all*"]}}
@@ -107,7 +107,7 @@
   (with-user
     (fn [d u]
       (let [{:keys [pid a]} (seed d u)
-            loaded (plans/load-plan d pid)]
+            loaded (helpers/load-plan d pid)]
         (is (= [["c"] [["G1" ["a" "b"]] ["G2" ["d"]]]] (shape loaded)))
         (is (= {:plan.task/id a :plan.task/plan pid :plan.task/icon "🧦"}
                (select-keys (first (:tasks (first (:sections loaded))))
@@ -121,11 +121,11 @@
         (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/move-section! % u {:id g2 :direction :up})))))
         (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/place-plan-task! % u {:id b :section-id g1 :before a})))))
         (tx! d #(plans/place-plan-task! % u {:id dd :section-id g2 :before nil}))
-        (is (= [["c"] [["G2" ["d"]] ["G1" ["b" "a"]]]] (shape (plans/load-plan d pid))))
+        (is (= [["c"] [["G2" ["d"]] ["G1" ["b" "a"]]]] (shape (helpers/load-plan d pid))))
         (tx! d #(plans/place-plan-task! % u {:id a :section-id g2 :before dd}))
         (tx! d #(plans/place-plan-task! % u {:id c :section-id g1 :before nil}))
         (tx! d #(plans/place-plan-task! % u {:id b :section-id nil :before nil}))
-        (is (= [["b"] [["G2" ["a" "d"]] ["G1" ["c"]]]] (shape (plans/load-plan d pid)))
+        (is (= [["b"] [["G2" ["a" "d"]] ["G1" ["c"]]]] (shape (helpers/load-plan d pid)))
             "placing a task in another section, or none, moves it there")
         (is (= (repeat 7 "create") (mapv :action (events d)))
             "reordering records no events")))))
@@ -151,7 +151,7 @@
       (let [{:keys [pid g1 a b]} (seed d u)
             before (count (events d))]
         (is (= #{[:plan pid] [:plan pid :structure]} (:topics (tx! d #(plans/delete-section! % u {:id g1})))))
-        (is (= [["c"] [["G2" ["d"]]]] (shape (plans/load-plan d pid))))
+        (is (= [["c"] [["G2" ["d"]]]] (shape (helpers/load-plan d pid))))
         (is (= [{:entity_type "plan.task" :entity_id a :plan_id pid :action "delete" :data {:title "a"}}
                 {:entity_type "plan.task" :entity_id b :plan_id pid :action "delete" :data {:title "b"}}
                 {:entity_type "plan.section" :entity_id g1 :plan_id pid :action "delete" :data {:title "G1"}}]

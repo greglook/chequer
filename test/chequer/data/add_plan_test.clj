@@ -53,7 +53,7 @@
 (defn- shape
   "The list's display order as [unsectioned-titles [section-title task-titles]...]."
   [d lid]
-  (let [{:keys [unsectioned sections]} (lists/load-list d lid)]
+  (let [{:keys [unsectioned sections]} (helpers/load-list d lid)]
     [(mapv :task/title unsectioned)
      (mapv (fn [{:keys [section tasks]}] [(:list.section/title section) (mapv :task/title tasks)]) sections)]))
 
@@ -83,7 +83,7 @@
         (is (= #{[:list lid] [:list lid :header] [:list lid :structure] [:lists]} topics))
         (is (= [["Passport" "Charger"] [["Clothes" ["Socks" "Shirts"]] ["Toiletries" ["Toothbrush"]]]]
                (shape d lid)))
-        (let [loaded (lists/load-list d lid)
+        (let [loaded (helpers/load-list d lid)
               charger (second (:unsectioned loaded))]
           (is (= {:task/description "USB-C *and* lightning" :task/icon "🔌"
                   :task/state :pending :task/source (tasks "Charger")}

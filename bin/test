@@ -9,8 +9,9 @@ if [[ $1 = lint ]]; then
     clj-kondo --lint src:test
 
 elif [[ $1 = carve ]]; then
+    shift
     # NOTE: doesn't run on jolt yet
-    exec clj -M:carve --paths src --dry-run
+    exec clj -M:carve --paths src "$@"
 
 else
     # Slow tests tagged ^:load are skipped unless the arguments choose what to include.
