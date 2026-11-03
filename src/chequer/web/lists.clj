@@ -10,7 +10,7 @@
     [chequer.time :as time]
     [chequer.users :as users]
     [chequer.web.common :as web :refer [action delete-icon-button delete-menu-item edit-form
-                                        edit-icon-button edit-toggle errors-el field
+                                        edit-icon-button edit-toggle errors-el escape-expr field
                                         history-icon-link html html-response icon-button
                                         icon-field more-menu move-buttons mutate raw
                                         text-response toggle-signal]]
@@ -208,9 +208,31 @@
      [new-task-form list-id id]]))
 
 
+(defn- add-plans-signal
+  "Local signal name showing the add-plans panel of list list-id."
+  [list-id]
+  (str "_addPlans" list-id))
+
+
+(defn- add-plans-button
+  "The button toggling list list-id's add-plans panel, disabled while there are no plans."
+  [list-id plans?]
+  (let [signal (add-plans-signal list-id)]
+    (if plans?
+      [:button.toggle {:type "button"
+                       :data-signals__ifmissing (str "{" signal ": false}")
+                       :data-class:on (str "$" signal)
+                       :data-attr:aria-expanded (str "String($" signal ")")
+                       :data-on:click (str "$" signal " = !$" signal)}
+       "Add plans"]
+      [:button.toggle {:type "button" :disabled true :title "There are no plans to add yet"}
+       "Add plans"])))
+
+
 (defn- render-header
-  "#list-<id>-header: the title, progress, due date, controls and the inline edit form."
-  [l counts v]
+  "#list-<id>-header: the title, progress, due date, controls and the inline edit form.
+  plans? says whether any plans exist to add."
+  [l counts plans? v]
   (let [id (:list/id l)
         path (str "/lists/" id)
         signal (toggle-signal "List" id)
@@ -231,6 +253,7 @@
      (when-let [d (:list/description l)]
        [:div.markdown (raw (md/render d))])
      [:div.controls
+      (add-plans-button id plans?)
       (if (:mine? v)
         [:a.toggle.on {:href path} "Assigned to me"]
         [:a.toggle {:href (str path "?mine=1")} "Assigned to me"])
@@ -254,7 +277,88 @@
   [{:chequer/keys [db live]} list-id v]
   @(live/cell live [:list list-id :header])
   (when-let [{l :list :keys [counts]} (lists/load-list-header db list-id)]
-    (render-header l counts v)))
+    (render-header l counts (some? (db/q1 db ["SELECT 1 FROM plan LIMIT 1"])) v)))
+
+
+;; ## Adding plans
+
+(def ^:private plan-ids-key
+  (keyword "plan_ids[]"))
+
+
+(defn- pluralize
+  [n noun]
+  (str n " " noun (when (not= 1 n) "s")))
+
+
+(defn- plan-sizes
+  "How many sections and tasks plan p has, e.g. \"2 sections, 5 tasks\"."
+  [p]
+  (let [sections (or (:plan/section-count p) 0)]
+    (str (when (pos? sections) (str (pluralize sections "section") ", "))
+         (pluralize (or (:plan/task-count p) 0) "task"))))
+
+
+(defn- plan-picker
+  "Checkboxes choosing plans, submitted as plan_ids[] in the order shown, each with its size.
+  With reorder?, up and down buttons reorder them in the page. The plans with ids in selected
+  come first, checked, in that order."
+  [all-plans selected reorder?]
+  (let [by-id (into {} (map (juxt :plan/id identity)) all-plans)
+        chosen (keep by-id (distinct selected))
+        chosen? (set (map :plan/id chosen))]
+    (when (seq all-plans)
+      [:fieldset.plan-picker
+       [:legend "Plans"]
+       [:ol
+        (for [p (concat chosen (remove #(chosen? (:plan/id %)) all-plans))]
+          [:li
+           [:label
+            [:input {:type "checkbox" :name "plan_ids[]" :value (str (:plan/id p)) :checked (contains? chosen? (:plan/id p))}]
+            [:span.icon (:plan/icon p)] " " (:plan/title p)]
+           [:span.size (plan-sizes p)]
+           (when reorder?
+             (list [:button {:type "button" :title "Move up"
+                             :data-on:click "el.closest('li').previousElementSibling?.before(el.closest('li'))"} "↑"]
+                   [:button {:type "button" :title "Move down"
+                             :data-on:click "el.closest('li').nextElementSibling?.after(el.closest('li'))"} "↓"]))])]])))
+
+
+(defn- plan-ids
+  "The ids of the body's plan_ids[], in order and without repeats."
+  [body]
+  (vec (distinct (keep web/parse-id (get body plan-ids-key)))))
+
+
+(defn flash-message
+  "A sentence describing the result of add-plan!, e.g. \"Added Packing: 12 tasks, 3 skipped\"."
+  [{:keys [plan-title tasks-created tasks-skipped]}]
+  (str "Added " plan-title ": " (pluralize tasks-created "task")
+       (when (pos? tasks-skipped) (str ", " tasks-skipped " skipped"))))
+
+
+(defn- flash-id
+  [list-id]
+  (str "list-" list-id "-flash"))
+
+
+(defn- add-plans-panel
+  "The panel adding plans to list list-id, shown by the header's add-plans button and closed
+  by Escape or a successful add, and the flash element its results go to. It's ignored by
+  morphs, so re-renders of #live keep its choices; patches inside it must replace elements."
+  [list-id all-plans]
+  (when (seq all-plans)
+    (let [signal (add-plans-signal list-id)]
+      [:div.add-plans {:id (str "list-" list-id "-add-plans")
+                       :data-ignore-morph true
+                       :data-signals__ifmissing (str "{" signal ": false}")}
+       [:section {:data-show (str "$" signal) :style "display: none"
+                  :data-on:keydown__window (escape-expr (str "$" signal) (str "$" signal " = false"))}
+        [:form {:data-on:submit (str (action "post" (str "/lists/" list-id "/add-plans")) "; el.reset()")}
+         (plan-picker all-plans nil false)
+         (errors-el (str "add-plans-" list-id "-errors"))
+         [:button "Add"]]]
+       [:div.flash {:id (flash-id list-id)}]])))
 
 
 (defn- list-body
@@ -266,6 +370,7 @@
   @(live/cell live [:list list-id :structure])
   (if-let [{:keys [unsectioned sections]} (lists/load-list-structure db list-id)]
     (list [header-view src list-id v]
+          (add-plans-panel list-id (plans/list-plans db))
           (task-list src list-id nil unsectioned v)
           [new-task-form list-id nil]
           (map #(vector render-section src list-id % v) sections)
@@ -320,72 +425,6 @@
        [:p.empty (if archived? "No archived lists." "No lists yet.")])]))
 
 
-;; ## Adding plans
-
-(def ^:private plan-ids-key
-  (keyword "plan_ids[]"))
-
-
-(defn- plan-picker
-  "Checkboxes choosing plans, submitted as plan_ids[] in the order shown, with up and down
-  buttons that reorder them in the page. The plans with ids in selected come first, checked,
-  in that order."
-  [all-plans selected]
-  (let [by-id (into {} (map (juxt :plan/id identity)) all-plans)
-        chosen (keep by-id (distinct selected))
-        chosen? (set (map :plan/id chosen))]
-    (when (seq all-plans)
-      [:fieldset.plan-picker
-       [:legend "Plans"]
-       [:ol
-        (for [p (concat chosen (remove #(chosen? (:plan/id %)) all-plans))]
-          [:li
-           [:label
-            [:input {:type "checkbox" :name "plan_ids[]" :value (str (:plan/id p)) :checked (contains? chosen? (:plan/id p))}]
-            [:span.icon (:plan/icon p)] " " (:plan/title p)]
-           [:button {:type "button" :title "Move up"
-                     :data-on:click "el.closest('li').previousElementSibling?.before(el.closest('li'))"} "↑"]
-           [:button {:type "button" :title "Move down"
-                     :data-on:click "el.closest('li').nextElementSibling?.after(el.closest('li'))"} "↓"]])]])))
-
-
-(defn- plan-ids
-  "The ids of the body's plan_ids[], in order and without repeats."
-  [body]
-  (vec (distinct (keep web/parse-id (get body plan-ids-key)))))
-
-
-(defn- pluralize
-  [n noun]
-  (str n " " noun (when (not= 1 n) "s")))
-
-
-(defn flash-message
-  "A sentence describing the result of add-plan!, e.g. \"Added Packing: 12 tasks, 3 skipped\"."
-  [{:keys [plan-title tasks-created tasks-skipped]}]
-  (str "Added " plan-title ": " (pluralize tasks-created "task")
-       (when (pos? tasks-skipped) (str ", " tasks-skipped " skipped"))))
-
-
-(defn- flash-id
-  [list-id]
-  (str "list-" list-id "-flash"))
-
-
-(defn- add-plans-form
-  "The form adding plans to list list-id, outside #live so re-renders keep its choices, and
-  the flash element its results go to."
-  [list-id all-plans]
-  (when (seq all-plans)
-    (list [:details.add-plans
-           [:summary "Add plans"]
-           [:form {:data-on:submit (str (action "post" (str "/lists/" list-id "/add-plans")) "; el.reset()")}
-            (plan-picker all-plans nil)
-            (errors-el (str "add-plans-" list-id "-errors"))
-            [:button "Add"]]]
-          [:div.flash {:id (flash-id list-id)}])))
-
-
 ;; ## Pages
 
 (defn index
@@ -420,7 +459,8 @@
                                (field "Due" "due" nil {:type "date"})
                                [:label "Description" [:textarea {:name "description" :rows 4}]]
                                (plan-picker (plans/list-plans db)
-                                            (some-> (web/query-param req "plan") parse-long vector))
+                                            (some-> (web/query-param req "plan") parse-long vector)
+                                            true)
                                (errors-el "new-list-errors")
                                [:button "Create"]])))
 
@@ -437,8 +477,7 @@
       (if-let [{:keys [title]} (db/q1 db ["SELECT title FROM list WHERE id = ?" id])]
         (html-response 200
                        (layout/page req title
-                                    [:div#live web/live-attrs fragment]
-                                    (add-plans-form id (plans/list-plans db))))
+                                    [:div#live web/live-attrs fragment]))
         (text-response 404 "Not found")))))
 
 
@@ -614,8 +653,10 @@
               (web/sse-response
                 [(ds/patch-elements-event (html [:div.flash {:id (flash-id id)}
                                                  (for [r results] [:p (flash-message r)])])
-                                          nil "outer")
-                 (ds/patch-elements-event (html (errors-el (str "add-plans-" id "-errors"))) nil "outer")])))))
+                                          nil "replace")
+                 (ds/patch-elements-event (html (errors-el (str "add-plans-" id "-errors"))) nil "replace")
+                 (str "event: datastar-patch-signals\n"
+                      "data: signals " (ds/signals-json {(add-plans-signal id) false}) "\n\n")])))))
 
 
 (def routes

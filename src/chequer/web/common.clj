@@ -195,7 +195,7 @@
   (sse-response [(ds/patch-elements-event (html [:ul.errors {:id id}
                                                  (for [[k msg] (sort-by key errors)]
                                                    [:li (str (str/capitalize (name k)) " " msg)])])
-                                          nil "outer")]))
+                                          nil "replace")]))
 
 
 (defn field
@@ -326,7 +326,7 @@
   [:button.danger {:type "button" :data-on:click (confirmed question (str "@delete('" path "')"))} "Delete"])
 
 
-(defn- escape-expr
+(defn escape-expr
   "A keydown expression that runs handler on an Escape that nothing else, like the icon
   picker or a drag, has handled (by preventing its default), while condition holds."
   [condition handler]

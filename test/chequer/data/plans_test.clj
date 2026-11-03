@@ -201,3 +201,16 @@
       (tx! d #(plans/create-plan! % u {:title "b"}))
       (tx! d #(plans/create-plan! % u {:title "A"}))
       (is (= ["A" "b"] (mapv :plan/title (plans/list-plans d)))))))
+
+
+(deftest list-plans-counts-sections-and-tasks
+  (with-user
+    (fn [d u]
+      (tx! d (fn [tx]
+               (let [pid (plans/create-plan! tx u {:title "P"})
+                     g (plans/create-section! tx u {:plan-id pid :title "G"})]
+                 (plans/create-plan-task! tx u {:plan-id pid :title "a"})
+                 (plans/create-plan-task! tx u {:plan-id pid :section-id g :title "b"}))))
+      (tx! d #(plans/create-plan! % u {:title "Q"}))
+      (is (= [[1 2] [0 0]]
+             (mapv (juxt :plan/section-count :plan/task-count) (plans/list-plans d)))))))

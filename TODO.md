@@ -16,10 +16,10 @@ A list of miscellaneous items I notice that I want to fix later.
 - Slug identifiers in routes? Would be prettier
 
 ## UI
-- "Add Plans" to a list should be a modal view, not a collapsed list on the page
-- Eventually, organize plans in a hierarchical structure?
 - Copy list task to plan (or update matching task)
 - Copy list section to plan (or update matching tasks)
+- Collapse/expand all sections
 
-## Bugs
-- ...
+## Future Ideas
+- Organize plans in a hierarchical structure
+- Automatically suggest icon for task?

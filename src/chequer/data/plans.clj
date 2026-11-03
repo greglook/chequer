@@ -351,9 +351,13 @@
 ;; ## Reads
 
 (defn list-plans
-  "All plans, ordered by title."
+  "All plans, ordered by title, with their :plan/section-count and :plan/task-count."
   [db]
-  (mapv row->plan (db/q db ["SELECT * FROM plan ORDER BY title COLLATE NOCASE, id"])))
+  (mapv #(assoc (row->plan %) :plan/section-count (:section_count %) :plan/task-count (:task_count %))
+        (db/q db ["SELECT p.*,
+                          (SELECT COUNT(*) FROM plan_section s WHERE s.plan_id = p.id) AS section_count,
+                          (SELECT COUNT(*) FROM plan_task t WHERE t.plan_id = p.id) AS task_count
+                   FROM plan p ORDER BY p.title COLLATE NOCASE, p.id"])))
 
 
 (defn load-plan-task

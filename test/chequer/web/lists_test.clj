@@ -449,6 +449,16 @@
         (is (= 400 (:status (request h :post "/lists" {:signals {:title "X" plan-ids-key ["nope"]}}))))))))
 
 
+(deftest the-add-plans-button-is-disabled-without-plans
+  (with-app
+    (fn [h sys]
+      (owner h sys)
+      (let [lid (create-list! h "Trip")
+            body (:body (request h :get (str "/lists/" lid)))]
+        (is (re-find #"<button[^>]* disabled[^>]*There are no plans to add yet" body))
+        (is (not (str/includes? body (str "/lists/" lid "/add-plans"))))))))
+
+
 (deftest adding-plans-to-a-list-flashes-counts-and-updates-viewers
   (with-app
     (fn [h sys]
@@ -459,14 +469,26 @@
         (testing "the list page offers the plans"
           (let [body (:body (request h :get (str "/lists/" lid)))]
             (is (str/includes? body (str "/lists/" lid "/add-plans")))
-            (is (str/includes? body (str "id=\"list-" lid "-flash\"")))))
+            (is (str/includes? body (str "id=\"list-" lid "-flash\"")))
+            (is (str/includes? body "data-show=\"$_addPlans"))
+            (testing "inside #live, between the header and the tasks, ignored by morphs"
+              (is (< (str/index-of body "id=\"live\"")
+                     (str/index-of body (str "id=\"list-" lid "-header\""))
+                     (str/index-of body (str "id=\"list-" lid "-add-plans\" class=\"add-plans\" data-ignore-morph"))
+                     (str/index-of body "class=\"tasks"))))
+            (is (str/includes? body "<span class=\"size\">1 section, 3 tasks</span>"))
+            (is (not (str/includes? body "Move up")) "the plans aren't reorderable")
+            (is (not (str/includes? body "There are no plans to add yet")))))
         (let [ch (:body (request h :get (str "/lists/" lid "?datastar-sse=true&datastar-selector=%23live")))]
           (try
             (take-frame ch)
             (let [r (add [packing])]
               (is (= 200 (:status r)))
               (is (str/includes? (:body r) (str "id=\"list-" lid "-flash\"")))
-              (is (str/includes? (:body r) "Added Packing: 3 tasks")))
+              (is (str/includes? (:body r) "Added Packing: 3 tasks"))
+              (is (not (str/includes? (:body r) "data: mode outer")) "patches inside an ignored morph replace")
+              (testing "and closes the panel"
+                (is (str/includes? (:body r) (str "\"_addPlans" lid "\":false")))))
             (testing "other viewers get a live update"
               (let [frame (take-frame ch)]
                 (is (str/includes? frame "Passport"))

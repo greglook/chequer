@@ -407,6 +407,14 @@ button.primary:hover,
   color: var(--accent-text);
 }
 
+button:disabled,
+button:disabled:hover {
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 button.danger:hover {
   background: var(--danger-soft);
   color: var(--danger);
@@ -1261,27 +1269,25 @@ ul.plans li > a:hover {
 
 /* ## Adding plans */
 
-details.add-plans {
-  margin-top: 2.5rem;
-  border-top: 1px solid var(--border);
-  padding-top: 1rem;
+.add-plans > section {
+  margin: -0.75rem 0 1.5rem;
 }
 
-details.add-plans > summary {
-  cursor: pointer;
-  color: var(--muted);
-  font-weight: 550;
-  width: fit-content;
-}
-
-details.add-plans > form {
+.add-plans > section > form {
   display: grid;
   gap: 0.75rem;
-  margin-top: 0.75rem;
 }
 
-details.add-plans > form > button {
+.add-plans > section > form > button {
   justify-self: start;
+}
+
+.add-plans > .flash:not(:empty) {
+  margin: -0.75rem 0 1.5rem;
+}
+
+.add-plans > .flash > p:first-child {
+  margin-top: 0;
 }
 
 fieldset.plan-picker {
@@ -1327,6 +1333,17 @@ fieldset.plan-picker legend {
 
 .plan-picker label .icon {
   margin-right: -0.25rem;
+}
+
+.plan-picker .size {
+  margin-left: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.plan-picker .size + button {
+  margin-left: 0.5rem;
 }
 
 .flash p {
