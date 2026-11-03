@@ -214,8 +214,8 @@
   "The emoji picker every icon field on the page shares, which the layout renders once,
   outside the live content, so that live renders don't send it. /js/icon-picker.js opens it
   under the icon input clicked and fills that input with the emoji picked. Its search box
-  fetches up to 20 matches from /emoji into #icon-results as you type, and when the picker
-  opens."
+  fetches up to five pages of matches from /emoji into #icon-results as you type, and when
+  the picker opens."
   (let [fetch "@get('/emoji?q=' + encodeURIComponent(el.value))"]
     [:div#icon-picker.icon-picker {:hidden true}
      [:input {:type "search" :placeholder "Search emoji" :aria-label "Search emoji" :autocomplete "off"

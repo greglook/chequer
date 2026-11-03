@@ -333,7 +333,11 @@
         (is (= 200 (:status r)))
         (is (str/includes? (:body r) "datastar-patch-elements"))
         (is (str/includes? (:body r) "id=\"icon-results\""))
-        (is (str/includes? (:body r) "data-emoji=\"🍇\"")))
+        (is (str/includes? (:body r) "data-emoji=\"🍇\""))
+        (is (not (str/includes? (:body r) "emoji-pager")) "one page needs no pager"))
       (is (str/includes? (:body (request h :get "/emoji?q=zzzqqq"))
                          "No matching emoji."))
-      (is (= 20 (count (re-seq #"data-emoji=" (:body (request h :get "/emoji")))))))))
+      (let [body (:body (request h :get "/emoji"))]
+        (is (= 100 (count (re-seq #"data-emoji=" body))) "up to five pages")
+        (is (= 5 (count (re-seq #"class=\"emoji-page\"" body))))
+        (is (str/includes? body "emoji-pager"))))))

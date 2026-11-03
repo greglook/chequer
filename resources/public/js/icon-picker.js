@@ -5,7 +5,8 @@
 // an empty search, and its search box gets an icon-picker-open event, on which Datastar
 // fetches the results. Picking an emoji fills the input that opened the picker and closes
 // it; so does Enter in the search box, with the first result. Clear icon empties the input.
-// Escape, or a click outside the picker and its input, closes it.
+// Escape, or a click outside the picker and its input, closes it. The results come in pages
+// side by side, which scroll snaps to: swipe through them, or page with the pager's buttons.
 (function () {
   var input = null;
 
@@ -30,6 +31,30 @@
     }
     p.style.left = Math.max(8, Math.min(r.left, root.clientWidth - p.offsetWidth - 8)) + 'px';
     p.style.top = top + 'px';
+  }
+
+  // The index of the page of results pages is scrolled to.
+  function pageIndex(pages) {
+    return Math.round(pages.scrollLeft / pages.clientWidth);
+  }
+
+  function turnPage(delta) {
+    var pages = picker().querySelector('.emoji-pages');
+    if (!pages) return;
+    pages.scrollTo({left: (pageIndex(pages) + delta) * pages.clientWidth, behavior: 'smooth'});
+  }
+
+  // Mark the page scrolled to in the pager, and disable its buttons at either end.
+  function updatePager(pages) {
+    var pager = pages.parentNode.querySelector('.emoji-pager');
+    if (!pager) return;
+    var dots = pager.querySelectorAll('.dots span');
+    var i = pageIndex(pages);
+    dots.forEach(function (dot, j) {
+      dot.classList.toggle('current', j === i);
+    });
+    pager.querySelector('.prev').disabled = i <= 0;
+    pager.querySelector('.next').disabled = i >= dots.length - 1;
   }
 
   function replace() {
@@ -79,6 +104,13 @@
     var emoji = e.target.closest('[data-emoji]');
     if (emoji) fill(emoji.dataset.emoji);
     else if (e.target.closest('button.clear')) fill('');
+    else if (e.target.closest('.emoji-pager .prev')) turnPage(-1);
+    else if (e.target.closest('.emoji-pager .next')) turnPage(1);
+  });
+
+  // Paging keeps the focus in the search box, so you can go on typing.
+  document.addEventListener('mousedown', function (e) {
+    if (e.target.closest('#icon-picker .emoji-pager button')) e.preventDefault();
   });
 
   document.addEventListener('keydown', function (e) {
@@ -95,8 +127,11 @@
   });
 
   window.addEventListener('resize', replace);
-  // capture, to hear scrolling of any element the input is in
-  window.addEventListener('scroll', replace, true);
+  // capture, to hear scrolling of any element the input is in, or of the pages of results
+  window.addEventListener('scroll', function (e) {
+    if (e.target.classList && e.target.classList.contains('emoji-pages')) updatePager(e.target);
+    else replace();
+  }, true);
   // results arriving change the picker's height, which can move it above the input
   if (window.ResizeObserver) {
     document.addEventListener('DOMContentLoaded', function () {
