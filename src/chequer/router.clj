@@ -18,7 +18,8 @@
 
 
 (defn- match-segments
-  "Match pattern segments against path segments. Keyword segments capture numeric ids."
+  "Match pattern segments against path segments. Keyword segments capture numeric ids, and
+  [id-key slug-key] segments capture an id with an optional -slug after it, e.g. 5-foo-bar."
   [pattern segments]
   (when (= (count pattern) (count segments))
     (reduce (fn [params [p s]]
@@ -26,6 +27,10 @@
                 (keyword? p) (if-let [id (parse-id s)]
                                (assoc params p id)
                                (reduced nil))
+                (vector? p) (let [[_ id-s slug] (re-matches #"(\d+)(?:-(.*))?" s)]
+                              (if-let [id (some-> id-s parse-id)]
+                                (assoc params (first p) id (second p) slug)
+                                (reduced nil)))
                 (= p s) params
                 :else (reduced nil)))
             {}
@@ -34,7 +39,8 @@
 
 (defn match
   "Find the route for method and path. Routes are [method pattern handler] vectors, e.g.
-  [:get [\"plans\" :id] f]. Returns {:handler f :params {:id 7}} or nil."
+  [:get [\"plans\" :id] f], or [:get [\"plans\" [:id :slug]] f] to also take a slug. Returns
+  {:handler f :params {:id 7}} (with :slug \"foo\" for /plans/7-foo) or nil."
   [routes method path]
   (let [segments (split-path path)]
     (some (fn [[m pattern handler]]

@@ -34,13 +34,18 @@
 
 
 (defn- request
+  "Call h with a request, sending signals as JSON. Like a browser, a GET follows a 302, such as
+  a plan page's redirect to its slug."
   ([h method uri] (request h method uri nil))
   ([h method uri signals]
-   (let [[path query] (str/split uri #"\?" 2)]
-     (h (cond-> {:request-method method :uri path :query-string query :headers {"origin" base-url}}
-          ;; Unescaped like a browser's JSON.stringify; Jolt's data.json mis-escapes emoji.
-          signals (assoc :body (ByteArrayInputStream. (.getBytes ^String (json/write-str signals :escape-unicode false) "UTF-8"))
-                         :headers {"origin" base-url "content-type" "application/json"}))))))
+   (let [[path query] (str/split uri #"\?" 2)
+         r (h (cond-> {:request-method method :uri path :query-string query :headers {"origin" base-url}}
+                ;; Unescaped like a browser's JSON.stringify; Jolt's data.json mis-escapes emoji.
+                signals (assoc :body (ByteArrayInputStream. (.getBytes ^String (json/write-str signals :escape-unicode false) "UTF-8"))
+                               :headers {"origin" base-url "content-type" "application/json"})))]
+     (if (and (= :get method) (= 302 (:status r)))
+       (request h method (get-in r [:headers "Location"]) signals)
+       r))))
 
 
 (defn- user-id
@@ -51,7 +56,7 @@
 (defn- create-plan!
   [h title]
   (let [r (request h :post "/plans" {:title title})]
-    (parse-long (second (re-find #"^/plans/(\d+)$" (get-in r [:headers "Location"]))))))
+    (parse-long (second (re-find #"^/plans/(\d+)-" (get-in r [:headers "Location"]))))))
 
 
 (defn- take-frame
@@ -79,7 +84,7 @@
       (let [r (request h :post "/plans" {:title "  Packing  " :icon "🧳"})
             row (db/q1 (:db sys) ["SELECT * FROM plan"])]
         (is (= 303 (:status r)))
-        (is (= (str "/plans/" (:id row)) (get-in r [:headers "Location"])))
+        (is (= (str "/plans/" (:id row) "-packing") (get-in r [:headers "Location"])))
         (is (= ["Packing" "🧳"] [(:title row) (:icon row)]))))))
 
 
@@ -107,6 +112,26 @@
             r (request h :post (str "/plans/" pid "/tasks") {:title "x" :icon "soon"})]
         (is (str/includes? (:body r) (str "id=\"new-plan-task-" pid "-errors\"")))
         (is (str/includes? (:body r) "must be a single emoji"))))))
+
+
+(deftest plan-page-redirects-to-its-slug
+  (with-app
+    (fn [h _]
+      (let [pid (create-plan! h "Packing")
+            get-uri #(h {:request-method :get :uri % :query-string %2 :headers {"origin" base-url}})]
+        (is (= 200 (:status (get-uri (str "/plans/" pid "-packing") nil))))
+        (doseq [uri [(str "/plans/" pid) (str "/plans/" pid "-old-name")]]
+          (let [r (get-uri uri nil)]
+            (is (= 302 (:status r)))
+            (is (= (str "/plans/" pid "-packing") (get-in r [:headers "Location"])))))
+        (is (= 200 (:status (get-uri (str "/plans/" pid "-old-name") "datastar-sse=true")))
+            "a stream opened before a rename keeps working")
+        (request h :put (str "/plans/" pid) {:title "Packing list"})
+        (is (= (str "/plans/" pid "-packing-list")
+               (get-in (get-uri (str "/plans/" pid "-packing") nil) [:headers "Location"])))
+        (is (str/includes? (:body (request h :get (str "/plans/" pid)))
+                           (str "history.replaceState(history.state, \"\", \"/plans/" pid "-packing-list\""))
+            "the header puts the current slug in the address bar")))))
 
 
 (deftest plan-page-shows-plan-and-subscribes-to-its-stream

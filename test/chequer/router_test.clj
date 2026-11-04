@@ -60,6 +60,14 @@
   (is (= {:id 0} (:params (router/match routes :get "/plans/0")))))
 
 
+(deftest slug-segments-capture-an-id-and-optional-slug
+  (let [slug-routes [[:get ["lists" [:id :slug]] h-show]]]
+    (is (= {:id 5 :slug "things-to-fix"} (:params (router/match slug-routes :get "/lists/5-things-to-fix"))))
+    (is (= {:id 5 :slug nil} (:params (router/match slug-routes :get "/lists/5"))))
+    (is (nil? (router/match slug-routes :get "/lists/things-5")))
+    (is (nil? (router/match slug-routes :get "/lists/5x")))))
+
+
 (deftest allowed-methods-lists-methods-for-a-path
   (is (= #{:get :put} (router/allowed-methods routes "/plans/7")))
   (is (= #{} (router/allowed-methods routes "/nope"))))

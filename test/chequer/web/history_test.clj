@@ -142,8 +142,8 @@
       (let [pid (tx d (plans/create-plan! tx u {:title "Packing"}))
             lid (tx d (lists/create-list! tx u {:title "Trip"}))
             tid (tx d (lists/create-task! tx u {:list-id lid :title "Socks"}))]
-        (is (str/includes? (:body (request h (str "/plans/" pid))) (str "href=\"/plans/" pid "/history\"")))
-        (let [body (:body (request h (str "/lists/" lid)))]
+        (is (str/includes? (:body (request h (str "/plans/" pid "-packing"))) (str "href=\"/plans/" pid "/history\"")))
+        (let [body (:body (request h (str "/lists/" lid "-trip")))]
           (is (str/includes? body (str "href=\"/lists/" lid "/history\"")))
           (is (str/includes? body (str "href=\"/tasks/" tid "/history\""))))))))
 
@@ -181,7 +181,7 @@
           (is (str/includes? body "<h1>Pack charger history</h1>"))
           (is (str/includes? body "Greg completed Pack charger"))
           (is (str/includes? body "Greg deleted task Pack charger"))
-          (is (str/includes? body (str "href=\"/lists/" lid "\""))))
+          (is (str/includes? body (str "href=\"/lists/" lid "-trip\""))))
         (is (str/includes? (:body (request h (str "/lists/" lid "/history"))) "Greg deleted task Pack charger"))))))
 
 

@@ -92,7 +92,7 @@
   (let [id (:id params)]
     (if-let [title (entity-title db "plan" id)]
       (handle #(history-response req {:heading title
-                                      :back [(str "/plans/" id) "Back to plan"]
+                                      :back [(web/plan-path id title) "Back to plan"]
                                       :fetch-events (fn [opts] (event/plan-history db id opts))}))
       (text-response 404 "Not found"))))
 
@@ -103,7 +103,7 @@
   (let [id (:id params)]
     (if-let [title (entity-title db "list" id)]
       (handle #(history-response req {:heading title
-                                      :back [(str "/lists/" id) "Back to list"]
+                                      :back [(web/list-path id title) "Back to list"]
                                       :fetch-events (fn [opts] (event/list-history db id opts))}))
       (text-response 404 "Not found"))))
 
@@ -112,10 +112,11 @@
   "GET /tasks/:id/history: the task's own events."
   [{:chequer/keys [db] :keys [params] :as req}]
   (let [id (:id params)
-        [newest] (event/entity-history db "task" id {:limit 1})]
+        [newest] (event/entity-history db "task" id {:limit 1})
+        list-id (:event/list newest)]
     (if newest
       (handle #(history-response req {:heading (:event/entity-title newest)
-                                      :back [(str "/lists/" (:event/list newest)) "Back to list"]
+                                      :back [(web/list-path list-id (entity-title db "list" list-id)) "Back to list"]
                                       :fetch-events (fn [opts] (event/entity-history db "task" id opts))}))
       (text-response 404 "Not found"))))
 

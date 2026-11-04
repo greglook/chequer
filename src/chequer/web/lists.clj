@@ -247,6 +247,7 @@
         done? (and (pos? total) (= total (closed-count counts)))
         archived? (some? (:list/archived-at l))]
     [:header.list-header (merge {:id (str "list-" id "-header")} (edit-toggle signal))
+     (web/replace-url-el (web/list-path id (:list/title l)))
      [:h1
       [:span.icon (:list/icon l)]
       [:span.title (:list/title l)]
@@ -411,7 +412,7 @@
         due (list-due l done? next-due)
         total (reduce + (vals counts))]
     [:li {:id (str "list-row-" id)}
-     [:a {:href (str "/lists/" id)}
+     [:a {:href (web/list-path id (:list/title l))}
       [:span.title [:span.icon (:list/icon l)] " " (:list/title l)]
       " "
       [:span.summary (str (closed-count counts) " of " total " done")]
@@ -483,18 +484,19 @@
 
 
 (defn show
-  "GET /lists/:id. The page opens an SSE request to the same URL (with its ?mine=1, if any),
-  which glimmer-datastar re-renders into #live whenever the list's topic is touched; a
-  deleted list sends the viewer to the index."
+  "GET /lists/:id-:slug, redirecting a missing or stale slug to the list's path. The page
+  opens an SSE request to the same URL (with its ?mine=1, if any), which glimmer-datastar
+  re-renders into #live whenever the list's topic is touched; a deleted list sends the
+  viewer to the index."
   [{:chequer/keys [db] :keys [params] :as req}]
-  (let [id (:id params)
-        fragment (render-list (web/sources req) id (view req))]
+  (let [id (:id params)]
     (if (:jolt.datastar/sse-request req)
-      (html-response 200 (html fragment))
+      (html-response 200 (html (render-list (web/sources req) id (view req))))
       (if-let [{:keys [title]} (db/q1 db ["SELECT title FROM list WHERE id = ?" id])]
-        (html-response 200
-                       (layout/page req title
-                                    [:div#live web/live-attrs fragment]))
+        (or (web/canonical-redirect req (web/list-path id title))
+            (html-response 200
+                           (layout/page req title
+                                        [:div#live web/live-attrs (render-list (web/sources req) id (view req))])))
         (text-response 404 "Not found")))))
 
 
@@ -548,8 +550,8 @@
           (fn [tx user body]
             (let [id (lists/create-list! tx user (merge {:title nil} (list-attrs body req)))]
               (add-plan/add-plans! tx user id (plan-ids body))
-              id))
-          #(web/created-response req (str "/lists/" %))))
+              (web/list-path id (:title body))))
+          #(web/created-response req %)))
 
 
 (defn update-list
@@ -682,7 +684,7 @@
    [:get ["lists"] index]
    [:post ["lists"] create-list]
    [:get ["lists" "new"] new-page]
-   [:get ["lists" :id] show]
+   [:get ["lists" [:id :slug]] show]
    [:put ["lists" :id] update-list]
    [:delete ["lists" :id] delete-list]
    [:post ["lists" :id "archive"] archive-list]

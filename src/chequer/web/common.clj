@@ -68,6 +68,51 @@
      (if (str/blank? label) "?" (str/upper-case (subs (str/trim label) 0 1)))]))
 
 
+;; ## Paths
+
+(defn slug
+  "title as a URL slug: lowercase ASCII letters and digits, the runs between them dashes."
+  [title]
+  (-> (str/lower-case (or title ""))
+      (str/replace #"[^a-z0-9]+" "-")
+      (str/replace #"^-|-$" "")))
+
+
+(defn- slug-path
+  [prefix id title]
+  (let [s (slug title)]
+    (str prefix id (when-not (str/blank? s) (str "-" s)))))
+
+
+(defn list-path
+  "The path of the list with id and title, e.g. /lists/5-things-to-fix."
+  [id title]
+  (slug-path "/lists/" id title))
+
+
+(defn plan-path
+  "The path of the plan with id and title, e.g. /plans/3-packing."
+  [id title]
+  (slug-path "/plans/" id title))
+
+
+(defn replace-url-el
+  "A script element that shows path (a server-built path, not user input) in the address bar,
+  keeping the query and fragment, without navigating, so a renamed entity's page shows its
+  new slug."
+  [path]
+  [:script {:data-effect "el.remove()"}
+   (raw (str "history.replaceState(history.state, \"\", \"" path "\" + location.search + location.hash)"))])
+
+
+(defn canonical-redirect
+  "A 302 to path, keeping the query string, when the request's uri is not path; else nil."
+  [{:keys [uri query-string]} path]
+  (when (not= uri path)
+    {:status 302
+     :headers {"Location" (cond-> path (seq query-string) (str "?" query-string))}}))
+
+
 ;; ## Responses
 
 (defn redirect-el

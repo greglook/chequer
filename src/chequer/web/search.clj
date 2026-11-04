@@ -17,8 +17,10 @@
 
 (defn- result-href
   "The page a result links to: its plan or list, scrolled to the task for a task."
-  [{:search/keys [kind entity-id owner-kind owner-id]}]
-  (str "/" owner-kind "s/" owner-id
+  [{:search/keys [kind entity-id owner-kind owner-id owner-title]}]
+  (str (case owner-kind
+         "plan" (web/plan-path owner-id owner-title)
+         "list" (web/list-path owner-id owner-title))
        (case kind
          "plan.task" (str "#plan-task-" entity-id)
          "task" (str "#task-" entity-id)

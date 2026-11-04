@@ -38,17 +38,21 @@
 
 (defn- request
   "Call h with a request; opts may carry :signals (sent as JSON), :form (a urlencoded body
-  string) and :tz (the tz cookie)."
+  string) and :tz (the tz cookie). Like a browser, a GET follows a 302, such as a list page's
+  redirect to its slug."
   ([h method uri] (request h method uri {}))
-  ([h method uri {:keys [signals form tz]}]
+  ([h method uri {:keys [signals form tz] :as opts}]
    (let [[path query] (str/split uri #"\?" 2)
          headers (cond-> {"origin" base-url}
                    tz (assoc "cookie" (str "tz=" tz))
                    signals (assoc "content-type" "application/json")
                    form (assoc "content-type" "application/x-www-form-urlencoded"))
-         body (or (some-> signals (json/write-str :escape-unicode false)) form)]
-     (h (cond-> {:request-method method :uri path :query-string query :headers headers}
-          body (assoc :body (ByteArrayInputStream. (.getBytes ^String body "UTF-8"))))))))
+         body (or (some-> signals (json/write-str :escape-unicode false)) form)
+         r (h (cond-> {:request-method method :uri path :query-string query :headers headers}
+                body (assoc :body (ByteArrayInputStream. (.getBytes ^String body "UTF-8")))))]
+     (if (and (= :get method) (= 302 (:status r)))
+       (request h method (get-in r [:headers "Location"]) opts)
+       r))))
 
 
 (defn- owner
@@ -61,7 +65,7 @@
 (defn- create-list!
   [h title]
   (let [r (request h :post "/lists" {:signals {:title title}})]
-    (parse-long (second (re-find #"^/lists/(\d+)$" (get-in r [:headers "Location"]))))))
+    (parse-long (second (re-find #"^/lists/(\d+)-" (get-in r [:headers "Location"]))))))
 
 
 (defn- task-ids
@@ -89,7 +93,7 @@
       (let [r (request h :post "/lists" {:signals {:title "  Groceries " :icon "🛒" :due ""}})
             row (db/q1 (:db sys) ["SELECT * FROM list"])]
         (is (= 303 (:status r)))
-        (is (= (str "/lists/" (:id row)) (get-in r [:headers "Location"])))
+        (is (= (str "/lists/" (:id row) "-groceries") (get-in r [:headers "Location"])))
         (is (= ["Groceries" "🛒" nil] [(:title row) (:icon row) (:due_at row)])))
       (let [r (request h :post "/lists" {:signals {:title " "}})]
         (is (str/includes? (:body r) "id=\"new-list-errors\""))
@@ -124,6 +128,19 @@
           (is (str/includes? body "0 of 3 done"))
           (is (< (str/index-of body "Passport") (str/index-of body "Clothes")) "unsectioned tasks come first"))
         (is (= 404 (:status (request h :get "/lists/999"))))))))
+
+
+(deftest list-page-redirects-to-its-slug
+  (with-app
+    (fn [h _]
+      (let [lid (create-list! h "Things to Fix")
+            r (h {:request-method :get :uri (str "/lists/" lid "-foo-bar") :query-string "mine=1"
+                  :headers {"origin" base-url}})]
+        (is (= 302 (:status r)))
+        (is (= (str "/lists/" lid "-things-to-fix?mine=1") (get-in r [:headers "Location"])))
+        (is (= 200 (:status (h {:request-method :get :uri (str "/lists/" lid "-things-to-fix")
+                                :headers {"origin" base-url}}))))
+        (is (str/includes? (:body (request h :get "/lists")) (str "href=\"/lists/" lid "-things-to-fix\"")))))))
 
 
 (deftest the-add-button-opens-the-new-tasks-edit-form
@@ -434,7 +451,7 @@
             (is (not (re-find (re-pattern (str "checked[^>]*value=\"" weekend "\"|value=\"" weekend "\"[^>]*checked")) body)))))
         (testing "a plain form post creates the list from the plans in the submitted order"
           (let [r (request h :post "/lists" {:form (str "title=Trip&plan_ids%5B%5D=" weekend "&plan_ids%5B%5D=" beach)})
-                lid (parse-long (second (re-find #"^/lists/(\d+)$" (get-in r [:headers "Location"]))))]
+                lid (parse-long (second (re-find #"^/lists/(\d+)-" (get-in r [:headers "Location"]))))]
             (is (= 303 (:status r)))
             (is (= [["Passport"] [["Clothes" ["Socks" "Hat" "Swimsuit"]] ["Fun" ["Kite"]]]] (shape sys lid))
                 "sections merge by title, and the duplicate socks is skipped")
@@ -442,7 +459,7 @@
                    (map :action (db/q (:db sys) ["SELECT action FROM event WHERE list_id = ? AND action = 'add-plan'" lid]))))))
         (testing "one plan arrives as a single field"
           (let [r (request h :post "/lists" {:form (str "title=Solo&plan_ids%5B%5D=" beach)})
-                lid (parse-long (second (re-find #"^/lists/(\d+)$" (get-in r [:headers "Location"]))))]
+                lid (parse-long (second (re-find #"^/lists/(\d+)-" (get-in r [:headers "Location"]))))]
             (is (= [[] [["clothes" ["Swimsuit" "socks"]] ["Fun" ["Kite"]]]] (shape sys lid)))))
         (testing "an invalid title creates nothing, even with plans"
           (let [before (count (db/q (:db sys) ["SELECT * FROM task"]))

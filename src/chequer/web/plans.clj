@@ -107,6 +107,7 @@
         path (str "/plans/" id)
         signal (toggle-signal "Plan" id)]
     [:header.plan-header (merge {:id (str "plan-" id "-header")} (edit-toggle signal))
+     (web/replace-url-el (web/plan-path id (:plan/title p)))
      [:h1 [:span.icon (:plan/icon p)] [:span.title (:plan/title p)]]
      (when-let [d (:plan/description p)]
        [:div.markdown (raw (md/render d))])
@@ -174,7 +175,7 @@
                               (if-let [ps (seq (plans/list-plans db))]
                                 [:ul.plans
                                  (for [p ps]
-                                   [:li [:a {:href (str "/plans/" (:plan/id p))}
+                                   [:li [:a {:href (web/plan-path (:plan/id p) (:plan/title p))}
                                          [:span.icon (:plan/icon p)] " " (:plan/title p)]])]
                                 [:p.empty "No plans yet."])
                               web/prune-collapsed)))
@@ -195,16 +196,16 @@
 
 
 (defn show
-  "GET /plans/:id. The page opens an SSE request to the same URL, which glimmer-datastar
-  re-renders into #live whenever the plan's topic is touched; a deleted plan sends the
-  viewer to the index."
+  "GET /plans/:id-:slug, redirecting a missing or stale slug to the plan's path. The page
+  opens an SSE request to the same URL, which glimmer-datastar re-renders into #live
+  whenever the plan's topic is touched; a deleted plan sends the viewer to the index."
   [{:chequer/keys [db] :keys [params] :as req}]
-  (let [id (:id params)
-        fragment (render-plan (web/sources req) id)]
+  (let [id (:id params)]
     (if (:jolt.datastar/sse-request req)
-      (html-response 200 (html fragment))
+      (html-response 200 (html (render-plan (web/sources req) id)))
       (if-let [{:keys [title]} (db/q1 db ["SELECT title FROM plan WHERE id = ?" id])]
-        (html-response 200 (layout/page req title [:div#live web/live-attrs fragment]))
+        (or (web/canonical-redirect req (web/plan-path id title))
+            (html-response 200 (layout/page req title [:div#live web/live-attrs (render-plan (web/sources req) id)])))
         (text-response 404 "Not found")))))
 
 
@@ -220,8 +221,9 @@
   [req]
   (mutate req "new-plan-errors"
           (fn [tx user params]
-            (plans/create-plan! tx user (merge {:title nil} (entity-attrs params [:title :description :icon]))))
-          #(web/created-response req (str "/plans/" %))))
+            (-> (plans/create-plan! tx user (merge {:title nil} (entity-attrs params [:title :description :icon])))
+                (web/plan-path (:title params))))
+          #(web/created-response req %)))
 
 
 (defn update-plan
@@ -309,7 +311,7 @@
   [[:get ["plans"] index]
    [:post ["plans"] create-plan]
    [:get ["plans" "new"] new-page]
-   [:get ["plans" :id] show]
+   [:get ["plans" [:id :slug]] show]
    [:put ["plans" :id] update-plan]
    [:delete ["plans" :id] delete-plan]
    [:post ["plans" :id "sections"] create-section]
